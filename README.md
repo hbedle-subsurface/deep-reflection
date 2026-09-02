@@ -147,8 +147,7 @@ units.
 
 ## Attributes
 
-Pick one from the Attribute list and a fourth panel appears below the removed
-panel.
+Attributes are chosen from a single checklist and computed on the current crop.
 
     Complex trace     envelope, instantaneous phase, cosine of phase,
                       instantaneous frequency, unwrapped phase, sweetness
@@ -233,9 +232,9 @@ chosen centre frequency rather than across the whole spectrum.
 
 ## Comparing several attributes
 
-Open "Compare several at once" in the Attributes tab, tick what you want, and
-press Compute. Any selection is drawn on a shared time axis, and each panel can
-be dismissed from its own header. The analytic trace and structure tensor are
+Tick what you want in the Attributes tab and press Show. One selected is drawn
+full width with its own axis and colour bar; several are drawn as a grid on a
+shared time axis, and each panel can be dismissed from its own header. The analytic trace and structure tensor are
 computed once for the whole set, so eight attributes on a 500,000-sample crop
 take under a second.
 

@@ -92,12 +92,14 @@ header .privacy{
 
 /* ---------- rail groups ---------- */
 .group{margin-bottom:1.5rem}
+.group.compact{margin-bottom:.7rem}
 .group > h2{
   font-size:.78rem;font-weight:600;color:var(--slate);
   margin:0 0 .55rem;padding-bottom:.3rem;
   border-bottom:1px solid var(--rule);
 }
-.group.off .body{opacity:.38;pointer-events:none}
+.group.off .body{display:none}
+.group > h2{margin-bottom:.4rem}
 
 .group > h2{display:flex;justify-content:space-between;align-items:center;gap:.4rem}
 button.help{
@@ -270,8 +272,11 @@ button.primary:hover{background:#6d1213;border-color:#6d1213}
 .fkcap{font-size:.72rem;color:var(--slate);padding:.2rem .35rem;border-top:1px solid var(--rule)}
 
 /* ---------- footer bits ---------- */
-details{margin-top:.6rem;border-top:1px solid var(--rule);padding-top:.5rem}
-details summary{cursor:pointer;font-size:.8rem;color:var(--slate);font-weight:600}
+details{margin-top:.5rem;border-top:1px solid var(--rule);padding-top:.4rem}
+details summary{cursor:pointer;font-size:.78rem;color:var(--slate);font-weight:600;
+  padding:.15rem 0}
+details summary:hover{color:var(--ink)}
+details[open] > summary{margin-bottom:.2rem}
 details pre{
   font-family:var(--num);font-size:.68rem;line-height:1.35;color:var(--ink);
   background:var(--paper);border:1px solid var(--rule);padding:.5rem;overflow:auto;max-height:260px;
@@ -296,7 +301,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.05</span>
+  <span class="ver" title="build date">v2026.09.06</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -324,7 +329,10 @@ details pre{
     </div>
     <div id="samples"></div>
     <div class="meta" id="meta" hidden>
-      <table id="metaTable"></table>
+      <p id="metaLine" style="margin:.5rem 0 0;font-size:.76rem;color:var(--ink)"></p>
+      <details><summary>File details</summary>
+        <table id="metaTable"></table>
+      </details>
       <details id="txtWrap"><summary>Textual header</summary><pre id="txtHdr"></pre></details>
     </div>
   </div>
@@ -332,12 +340,14 @@ details pre{
   <div class="group" id="g-crop">
     <h2>Crop</h2>
     <p class="hint" style="margin-top:0">Drag a box on the input panel to work on part of the line. Filters run on the crop, so the f-k transform sees only what you selected.</p>
-    <div class="cropgrid">
-      <label>First trace<input type="number" id="ci0" min="0" step="1"></label>
-      <label>Last trace<input type="number" id="ci1" min="0" step="1"></label>
-      <label>Start, ms<input type="number" id="cj0" min="0" step="1"></label>
-      <label>End, ms<input type="number" id="cj1" min="0" step="1"></label>
-    </div>
+    <details><summary>Set numerically</summary>
+      <div class="cropgrid" style="margin-top:.35rem">
+        <label>First trace<input type="number" id="ci0" min="0" step="1"></label>
+        <label>Last trace<input type="number" id="ci1" min="0" step="1"></label>
+        <label>Start, ms<input type="number" id="cj0" min="0" step="1"></label>
+        <label>End, ms<input type="number" id="cj1" min="0" step="1"></label>
+      </div>
+    </details>
     <p class="hint" id="bigNote" hidden style="color:var(--red)">This line is large
       enough that each filter change takes a few seconds. Cropping to a zone of
       interest makes the controls responsive.</p>
@@ -415,45 +425,15 @@ details pre{
 
   <div class="pane" id="pane-attr" role="tabpanel">
   <div class="group" id="g-attr">
-    <h2>Attribute</h2>
-    <div class="ctl">
-      <label for="attrPick">Show
-        <button class="help" id="helpAttr" data-help="start">Learn more</button>
-      </label>
-      <select id="attrPick">
-        <option value="none" selected>None</option>
-        <optgroup label="Complex trace">
-          <option value="envelope">Envelope</option>
-          <option value="insphase">Instantaneous phase</option>
-          <option value="cosphase">Cosine of phase</option>
-          <option value="insfreq">Instantaneous frequency</option>
-          <option value="unwrap">Unwrapped phase</option>
-          <option value="sweetness">Sweetness</option>
-        </optgroup>
-        <optgroup label="Wavelet (response)">
-          <option value="wavfreq">Wavelet frequency</option>
-          <option value="wavphase">Wavelet phase</option>
-          <option value="avgfreq">Average frequency</option>
-          <option value="avgband">Average bandwidth</option>
-        </optgroup>
-        <optgroup label="Energy and amplitude">
-          <option value="rms">RMS amplitude</option>
-          <option value="tke">Teager-Kaiser energy</option>
-          <option value="tkv">Teager-Kaiser variation</option>
-          <option value="avt">Amplitude volume transform</option>
-          <option value="rai">Relative acoustic impedance</option>
-        </optgroup>
-        <optgroup label="Geometric">
-          <option value="dip">Apparent dip</option>
-          <option value="linearity">Linearity</option>
-          <option value="coherence">In-line coherence</option>
-        </optgroup>
-        <optgroup label="Spectral">
-          <option value="band">Spectral band</option>
-          <option value="rgb">Three-band RGB blend</option>
-        </optgroup>
-      </select>
+    <h2>Attribute<button class="help" data-help="compare">Learn more</button></h2>
+    <div id="multiList"></div>
+    <div style="display:flex;gap:.35rem;margin-top:.5rem">
+      <button id="btnMultiSix" style="flex:1">Default set</button>
+      <button id="btnMultiNone" style="flex:1">Clear</button>
     </div>
+    <button id="btnMultiRun" class="primary" style="width:100%;margin-top:.35rem">
+      Show selected</button>
+    <p class="hint" id="multiNote"></p>
     <div class="ctl" id="winCtl" hidden>
       <label>Analysis window <b><span id="v-aw">40</span> ms</b></label>
       <input type="range" id="attrWin" min="4" max="500" step="2" value="40">
@@ -466,46 +446,17 @@ details pre{
       <label>Band centre <b><span id="v-fc">20</span> Hz</b></label>
       <input type="range" id="attrFc" min="4" max="80" step="1" value="20">
     </div>
-    <div class="ctl">
-      <label for="attrCmap">Color</label>
-      <select id="attrCmap">
-        <option value="magma">Magma</option>
-        <option value="viridis">Viridis</option>
-        <option value="cividis">Cividis</option>
-        <option value="batlow">Batlow (CVD-safe rainbow)</option>
-        <option value="gray">Gray</option>
-        <option value="coolwarm">Blue–white–red</option>
-        <option value="vik">Vik (CVD-safe diverging)</option>
-      </select>
-    </div>
-    <details id="multiWrap" style="margin-top:.7rem">
-      <summary>Compare several at once <button class="help" data-help="compare" style="margin-left:.3rem">Learn more</button></summary>
-      <p class="hint" style="margin-top:.4rem">Attributes are computed on the current
-        crop. Selecting many on an uncropped line is slow; crop first.</p>
-      <div id="multiList"></div>
-      <div style="display:flex;gap:.35rem;margin-top:.45rem">
-        <button id="btnMultiSix" style="flex:1">Diverse six</button>
-        <button id="btnMultiNone" style="flex:1">Clear</button>
-      </div>
-      <div class="ctl">
-        <label>Panel height <b><span id="v-mh">150</span> px</b></label>
-        <input type="range" id="multiH" min="90" max="420" step="10" value="150">
-      </div>
-      <button id="btnMultiRun" class="primary" style="width:100%;margin-top:.3rem">
-        Compute selected</button>
-      <p class="hint" id="multiNote"></p>
-    </details>
-    <p class="hint" id="attrHint">Attributes are computed on the kept section, so they
-      reflect the filters currently applied. With all filters off they are computed on
-      the data as read.</p>
-  </div>
+    <p class="hint">One selected is shown full width with an axis and colour bar.
+      Several are shown as a grid with a correlation matrix beneath. All are computed
+      on the current crop, from the kept section.</p>
   </div>
 
   <div class="pane" id="pane-disp" role="tabpanel">
   <div class="group" id="g-disp">
     <h2>Display<button class="help" data-help="display">Learn more</button></h2>
+
     <div class="ctl">
-      <label for="cmap">Color</label>
+      <label for="cmap">Section colour</label>
       <select id="cmap">
         <option value="bwr" selected>Blue–white–red</option>
         <option value="gray">Gray, dark lows</option>
@@ -523,25 +474,6 @@ details pre{
       <input type="range" id="gain" min="0.1" max="6" step="0.05" value="1">
     </div>
     <div class="ctl">
-      <label>Panel height <b><span id="v-ph">300</span> px</b></label>
-      <input type="range" id="ph" min="140" max="1400" step="10" value="300">
-    </div>
-    <div class="cropgrid" style="margin-top:.3rem">
-      <label>Trace spacing, m<input type="number" id="dxm" min="1" step="1" value="100"></label>
-      <label>Velocity, km/s<input type="number" id="vkms" min="1" step="0.1" value="6"></label>
-    </div>
-    <div class="cropgrid" style="margin-top:.3rem">
-      <label>Vertical exaggeration<input type="number" id="veWant" min="0.2" max="30"
-             step="0.5" value="3"></label>
-      <label style="justify-content:flex-end">
-        <button id="btnVE" style="margin-top:1.05rem">Apply</button></label>
-    </div>
-    <p class="hint" id="veNote"></p>
-    <div class="ctl">
-      <label>Removed-panel gain <b><span id="v-dgain">4.0</span>×</b></label>
-      <input type="range" id="dgain" min="1" max="40" step="0.5" value="4">
-    </div>
-    <div class="ctl">
       <label for="ampMode">Amplitude</label>
       <select id="ampMode">
         <option value="none" selected>As recorded</option>
@@ -557,26 +489,37 @@ details pre{
       <label>AGC window <b><span id="v-agc">500</span> ms</b></label>
       <input type="range" id="agcWin" min="50" max="2000" step="10" value="500">
     </div>
-    <p class="hint">All three panels share one gain field, so the removed panel stays at
-      the same scale as the input it came from. Time gain applies one smooth known curve
-      and preserves lateral amplitude relations; AGC does not, and after it the envelope
-      and impedance attributes no longer carry comparable amplitudes. Trace spacing is not
-      recorded in the headers of most legacy lines and has to be supplied; COCORP CDP
-      spacing is typically 50 to 100 m.</p>
+
+    <h2 style="margin-top:1.2rem">Scale</h2>
+    <div class="ctl">
+      <label>Panel height <b><span id="v-ph">300</span> px</b></label>
+      <input type="range" id="ph" min="140" max="1400" step="10" value="300">
+    </div>
+    <div class="cropgrid">
+      <label>Exaggeration<input type="number" id="veWant" min="0.2" max="30" step="0.5" value="3"></label>
+      <label style="justify-content:flex-end"><button id="btnVE" style="margin-top:1.05rem">Apply</button></label>
+      <label>Trace spacing, m<input type="number" id="dxm" min="1" step="1" value="100"></label>
+      <label>Velocity, km/s<input type="number" id="vkms" min="1" step="0.1" value="6"></label>
+    </div>
+    <p class="hint" id="veNote"></p>
+
+    <details style="margin-top:.8rem">
+      <summary>More</summary>
+      <div class="ctl">
+        <label>Removed-panel gain <b><span id="v-dgain">4.0</span>×</b></label>
+        <input type="range" id="dgain" min="1" max="40" step="0.5" value="4">
+      </div>
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.5rem">
+        <button id="btnPngKept" style="flex:1">Kept PNG</button>
+        <button id="btnPngRem" style="flex:1">Removed PNG</button>
+        <button id="btnPngAttr" style="flex:1">Attribute PNG</button>
+      </div>
+      <button id="btnSegy" style="width:100%;margin-top:.35rem">Save kept data as SEG-Y</button>
+      <button id="btnParams" style="width:100%;margin-top:.35rem">Copy settings text</button>
+      <p class="hint" id="paramOut"></p>
+    </details>
   </div>
 
-  <div class="group">
-    <h2>Export</h2>
-    <div class="row" style="display:flex;gap:.4rem;flex-wrap:wrap">
-      <button id="btnPngKept">Save kept panel</button>
-      <button id="btnPngRem">Save removed panel</button>
-      <button id="btnPngAttr">Save attribute panel</button>
-    </div>
-    <button id="btnSegy" style="width:100%;margin-top:.4rem">Save kept data as SEG-Y</button>
-    <button id="btnParams" style="width:100%;margin-top:.4rem">Copy settings text</button>
-    <p class="hint" id="paramOut"></p>
-  </div>
-  </div>
 </aside>
 
 <main class="stage">
@@ -1778,7 +1721,10 @@ let TENSOR = null, ATTR = null, ATTRKEY = "";
 let CROP = null;   // {i0, i1, j0, j1} in full-grid indices, i1/j1 exclusive
 
 function readParams(){
+  const sel = (typeof multiSelected === "function") ? multiSelected() : [];
   return {
+    attrSel: sel,
+    attr: sel.length === 1 ? sel[0] : "none",
     fkOn: $("fkOn").checked,
     dipMax: +$("dipMax").value, dipTap: +$("dipTap").value,
     fLo: +$("fLo").value,
@@ -1792,9 +1738,8 @@ function readParams(){
     ampMode: $("ampMode").value, tpow: +$("tpow").value,
     agcWin: +$("agcWin").value,
     dxm: +$("dxm").value, vkms: +$("vkms").value,
-    attr: $("attrPick").value, attrFc: +$("attrFc").value,
+    attrFc: +$("attrFc").value,
     attrWin: +$("attrWin").value, attrDl: +$("attrDl").value,
-    attrCmap: $("attrCmap").value,
     dt: SEG ? SEG.dt : 4000
   };
 }
@@ -1820,14 +1765,14 @@ function syncLabels(){
   $("v-fc").textContent = p.attrFc;
   $("v-aw").textContent = p.attrWin;
   $("v-dl").textContent = p.attrDl;
-  const ha = $("helpAttr");
-  ha.dataset.help = (p.attr === "none") ? "start" : p.attr;
-  ha.textContent = (p.attr === "none") ? "Learn more" : "About this attribute";
   syncBadges();
   $("remGain").textContent = p.dgain.toFixed(1) + "×";
   $("g-fk").classList.toggle("off", !p.fkOn);
   $("g-sos").classList.toggle("off", !p.sosOn);
   $("g-det").classList.toggle("off", !p.detOn);
+  $("g-fk").classList.toggle("compact", !p.fkOn);
+  $("g-sos").classList.toggle("compact", !p.sosOn);
+  $("g-det").classList.toggle("compact", !p.detOn);
 }
 
 function runFilters(){
@@ -2056,21 +2001,17 @@ function redraw(){
 
   sizePanels(p.ph);
 
-  $("bandCtl").hidden = !["band","rgb"].includes(p.attr);
-  $("winCtl").hidden = !["rms","avt","avgfreq","avgband"].includes(p.attr);
-  $("derivCtl").hidden = !["tke","tkv"].includes(p.attr);
+  const any = list => (p.attrSel || []).some(k => list.includes(k));
+  $("bandCtl").hidden = !any(["band","rgb"]);
+  $("winCtl").hidden = !any(["rms","avt","avgfreq","avgband"]);
+  $("derivCtl").hidden = !any(["tke","tkv"]);
   if (ATTR){
     $("attrPanel").hidden = false;
     $("attrTitle").textContent = ATTR.title;
     $("attrNote").textContent = ATTR.unit;
-    if (ATTR.rgb){
-      drawRGB($("cAt"), ATTR.rgb, ATTR.scales, nx, ns);
-    } else {
-      const useDefault = !$("attrCmap").dataset.touched;
-      const cm = useDefault ? ATTR.cmapDefault : p.attrCmap;
-      if (useDefault) $("attrCmap").value = cm;
-      drawRange($("cAt"), ATTR.a, nx, ns, ATTR.vmin, ATTR.vmax, buildALUT(cm));
-    }
+    if (ATTR.rgb) drawRGB($("cAt"), ATTR.rgb, ATTR.scales, nx, ns);
+    else drawRange($("cAt"), ATTR.a, nx, ns, ATTR.vmin, ATTR.vmax,
+                   buildALUT(ATTR.cmapDefault));
   } else {
     $("attrPanel").hidden = true;
   }
@@ -2144,8 +2085,8 @@ function drawAllAxes(clip, lut, p){
     drawYAxis("yf3", t0, t1, tunit, secPerUnit, vk);
     drawXAxis("xf3", xa, xb, xlab);
     if (ATTR.rgb){ fitCanvas($("bf3")); return; }
-    const cm = $("attrCmap").dataset.touched ? p.attrCmap : ATTR.cmapDefault;
-    drawColorbar("bf3", ATTR.vmin, ATTR.vmax, buildALUT(cm), ATTR.cbLabel || "");
+    drawColorbar("bf3", ATTR.vmin, ATTR.vmax,
+                 buildALUT(ATTR.cmapDefault), ATTR.cbLabel || "");
   }
 }
 
@@ -2180,14 +2121,21 @@ $("btnVE").addEventListener("click", () => {
   scheduleDisplay();
 });
 $("veWant").addEventListener("keydown", e => { if (e.key === "Enter") $("btnVE").click(); });
-$("attrCmap").addEventListener("change", e => {
-  e.target.dataset.touched = "1"; scheduleDisplay();
-});
-for (const id of ["attrPick","attrFc","attrWin","attrDl"])
+function refreshAttributes(){
+  const sel = multiSelected();
+  $("busy").hidden = false;
+  setTimeout(() => {
+    try {
+      if (sel.length > 1){ ATTR = null; ATTRKEY = ""; runMulti(); }
+      else { MULTI = []; drawMulti(); ATTRKEY = ""; computeAttribute(); }
+      redraw();
+    } finally { $("busy").hidden = true; }
+  }, 10);
+}
+for (const id of ["attrFc","attrWin","attrDl"])
   $(id).addEventListener("input", () => {
     syncLabels();
-    $("busy").hidden = false;
-    setTimeout(() => { computeAttribute(); redraw(); $("busy").hidden = true; }, 10);
+    if (ATTR || MULTI.length) refreshAttributes();
   });
 
 
@@ -2308,6 +2256,9 @@ function showMeta(s, filename, bytes){
     ["SEG-Y revision", (s.rev >> 8) + "." + (s.rev & 0xff)]
   ];
   $("metaTable").innerHTML = rows.map(r => "<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>").join("");
+  $("metaLine").textContent =
+    s.nx + " traces x " + s.ns + " samples, " + (s.dt/1000).toFixed(s.dt % 1000 ? 3 : 0) +
+    " ms, " + ((s.ns-1)*s.dt/1e6).toFixed(1) + " s record.";
   $("txtHdr").textContent = s.textual.join("\n");
   $("meta").hidden = false;
   $("decNote").textContent = s.step > 1 ? " — decimated to every " + s.step + " traces for display" : "";
@@ -2520,7 +2471,7 @@ function drawMulti(){
   const grid = $("multiGrid");
   if (!MULTI.length){ $("multiPanel").hidden = true; grid.innerHTML = ""; return; }
   const p = readParams();
-  const h = +$("multiH").value;
+  const h = Math.max(90, Math.round(readParams().ph * 0.55));
   $("multiPanel").hidden = false;
   $("multiCap").textContent =
     MULTI.length + " attributes on the current crop, same time axis";
@@ -2615,11 +2566,18 @@ setMultiSelection(MULTI_SIX);
 $("btnMultiSix").addEventListener("click", () => setMultiSelection(MULTI_SIX));
 $("btnMultiNone").addEventListener("click", () => setMultiSelection([]));
 $("btnMultiRun").addEventListener("click", () => {
-  const b = $("btnMultiRun"), t = b.textContent;
+  const b = $("btnMultiRun");
   b.textContent = "Computing\u2026"; b.disabled = true;
-  setTimeout(() => { try { runMulti(); } finally { b.textContent = t; b.disabled = false; } }, 10);
+  setTimeout(() => {
+    try {
+      const sel = multiSelected();
+      if (sel.length > 1){ ATTR = null; ATTRKEY = ""; runMulti(); }
+      else { MULTI = []; drawMulti(); ATTRKEY = ""; computeAttribute(); }
+      redraw();
+    } finally { b.textContent = "Show selected"; b.disabled = false; }
+  }, 10);
 });
-$("multiH").addEventListener("input", () => { $("v-mh").textContent = $("multiH").value; drawMulti(); });
+$("multiList").addEventListener("change", syncLabels);
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-drop]");
   if (!b) return;
