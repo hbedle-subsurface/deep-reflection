@@ -196,6 +196,41 @@ In-line coherence measures continuity along the line only, so a fault striking
 parallel to the line will not show in it. Both are limits of 2D acquisition
 rather than of the estimate.
 
+## Display for deep crustal data
+
+**Vertical exaggeration.** Enter the exaggeration you want and press Apply; the
+panel height follows. It defaults to 3x, the usual convention for reflection
+work. 1x is true scale, at which a dip measured off the display is the dip in
+the ground; at 3x a bed dipping 33 degrees is drawn at 63. The exaggeration is
+computed from a trace spacing and a velocity, and legacy trace headers rarely
+carry the spacing, so it is entered by hand. COCORP CDP spacing is typically 50
+to 100 m.
+
+**Amplitude.** Three choices, applied as a single gain field shared by all
+panels: as recorded, a time gain of t to a power, or AGC. The time gain is one
+smooth curve applied to every trace alike, so it counters divergence and
+attenuation while leaving lateral amplitude relations intact -- on a test where
+amplitude decays as 1/t^2 and varies laterally, a t^2 gain flattens the decay
+exactly and changes the lateral pattern by one part in 10^8, where AGC changes
+it by 50 percent. That is why the amplitude-based attributes stay interpretable
+under time gain and do not under AGC.
+
+**Depth axis.** With a velocity set, the time axis carries a second column of
+approximate depth in kilometres. It uses one velocity for the whole section, so
+it is a scale rather than a conversion.
+
+**Colour.** Batlow and vik are perceptually uniform and remain readable with
+colour vision deficiency, which a conventional rainbow does not. Batlow is the
+default for relative acoustic impedance and vik is available for any signed
+attribute. Amplitude volume transform defaults to grey, since it is read like a
+seismic section.
+
+**Three-band RGB blend.** Low, middle and high frequency bands mapped to red,
+green and blue. Colour then shows which part of the spectrum carries the energy
+rather than how much there is, which separates intervals that look alike on
+amplitude. On narrow-bandwidth legacy data the bands are placed around the
+chosen centre frequency rather than across the whole spectrum.
+
 ## Learn more
 
 Every filter group and the attribute picker carry a "Learn more" button, and
