@@ -1,0 +1,46 @@
+Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+
+Copyright (c) 2026 Heather Bedle, University of Oklahoma
+
+SCOPE OF THIS LICENSE
+
+This license applies to the original material in this repository:
+
+  index.html          the tool, including all source code and reference text
+  README.md           documentation
+  make_segy.py        the synthetic data generator
+  data/synthetic_2d_line.sgy   its output
+
+It does NOT apply to third-party material distributed alongside it. See
+NOTICE.md for the seismic data and published figures, which are covered by
+their own terms and are not relicensed by this file.
+
+TERMS
+
+This work is licensed under the Creative Commons Attribution-ShareAlike 4.0
+International License. To view a copy of this license, visit
+
+    https://creativecommons.org/licenses/by-sa/4.0/
+
+You are free to:
+
+  Share  - copy and redistribute the material in any medium or format
+  Adapt  - remix, transform, and build upon the material for any purpose,
+           including commercially
+
+Under the following terms:
+
+  Attribution - You must give appropriate credit, provide a link to the
+  license, and indicate if changes were made. You may do so in any reasonable
+  manner, but not in any way that suggests the licensor endorses you or your
+  use.
+
+  ShareAlike - If you remix, transform, or build upon the material, you must
+  distribute your contributions under the same license as the original.
+
+  No additional restrictions - You may not apply legal terms or technological
+  measures that legally restrict others from doing anything the license
+  permits.
+
+The full legal text is available at
+https://creativecommons.org/licenses/by-sa/4.0/legalcode

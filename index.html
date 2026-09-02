@@ -1,0 +1,2292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kept and Removed — seismic image filters</title>
+<style>
+:root{
+  --ink:#16191C;
+  --slate:#5C6670;
+  --rule:#C9CDD2;
+  --fill:#F4F6F7;
+  --red:#841617;
+  --paper:#FFFFFF;
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --num: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--ui);
+  color:var(--ink);
+  background:var(--paper);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+/* ---------- masthead ---------- */
+header{
+  display:flex;align-items:baseline;gap:1.25rem;flex-wrap:wrap;
+  padding:.9rem 1.25rem .8rem;
+  border-bottom:1px solid var(--rule);
+}
+header h1{
+  font-size:1.05rem;font-weight:600;margin:0;letter-spacing:-.01em;
+}
+header .sub{color:var(--slate);font-size:.82rem}
+header .spacer{flex:1}
+header .ver{font-family:var(--num);font-size:.72rem;color:var(--slate);
+  border:1px solid var(--rule);border-radius:2px;padding:.05rem .3rem}
+header .privacy{
+  color:var(--slate);font-size:.78rem;
+  border-left:2px solid var(--red);padding-left:.55rem;
+}
+
+/* ---------- shell ---------- */
+.shell{display:flex;align-items:stretch;min-height:calc(100vh - 52px)}
+.rail{
+  width:308px;flex:0 0 308px;
+  background:var(--fill);
+  border-right:1px solid var(--rule);
+  padding:1rem 1.05rem 3rem;
+  overflow-y:auto;
+  max-height:calc(100vh - 52px);
+  position:sticky;top:0;
+}
+.stage{flex:1;min-width:0;padding:1rem 1.25rem 4rem}
+
+/* ---------- tabs ---------- */
+.tabs{
+  display:flex;gap:1px;
+  margin:-1rem -1.05rem .9rem;padding:0 .35rem;
+  border-bottom:1px solid var(--rule);
+  background:var(--fill);position:sticky;top:0;z-index:6;
+}
+.tabs button{
+  flex:1;min-width:0;
+  border:0;background:none;border-radius:0;
+  padding:.6rem .1rem .5rem;
+  font-size:.76rem;color:var(--slate);
+  border-bottom:2px solid transparent;
+  margin-bottom:-1px;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{
+  color:var(--red);font-weight:600;border-bottom-color:var(--red);
+}
+.tabs .badge{
+  display:inline-block;margin-left:.25rem;
+  min-width:14px;padding:0 3px;
+  font-family:var(--num);font-size:.64rem;line-height:15px;
+  color:#fff;background:var(--red);border-radius:8px;vertical-align:1px;
+}
+.pane{display:none}
+.pane.on{display:block}
+.pane > .group:last-child{margin-bottom:.5rem}
+/* a lone group in a pane would just repeat the tab label */
+.pane > .group:only-child > h2{display:none}
+
+/* ---------- rail groups ---------- */
+.group{margin-bottom:1.5rem}
+.group > h2{
+  font-size:.78rem;font-weight:600;color:var(--slate);
+  margin:0 0 .55rem;padding-bottom:.3rem;
+  border-bottom:1px solid var(--rule);
+}
+.group.off .body{opacity:.38;pointer-events:none}
+
+.group > h2{display:flex;justify-content:space-between;align-items:center;gap:.4rem}
+button.help{
+  border:1px solid var(--rule);background:var(--paper);color:var(--slate);
+  border-radius:10px;padding:0 .42rem;font-size:.68rem;line-height:1.5;
+  font-weight:500;flex:0 0 auto;cursor:pointer;
+}
+button.help:hover{border-color:var(--red);color:var(--red)}
+button.help::before{content:"?";font-weight:700;margin-right:.22rem}
+header .helpmain{
+  border:1px solid var(--rule);background:var(--paper);color:var(--slate);
+  border-radius:2px;padding:.2rem .5rem;font-size:.76rem;cursor:pointer;
+}
+header .helpmain:hover{border-color:var(--red);color:var(--red)}
+
+.toggle{display:flex;align-items:center;gap:.5rem;margin:0 0 .55rem;cursor:pointer}
+.toggle input{margin:0;accent-color:var(--red);width:15px;height:15px}
+.toggle span{font-size:.82rem;font-weight:600;color:var(--slate)}
+.toggle input:checked + span{color:var(--red)}
+
+.ctl{margin:.55rem 0}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-size:.8rem;color:var(--slate)}
+.ctl label b{font-weight:500;color:var(--ink);font-family:var(--num);font-variant-numeric:tabular-nums;font-size:.78rem}
+.ctl input[type=range]{width:100%;margin:.25rem 0 0;accent-color:var(--red);height:18px}
+.ctl select{
+  width:100%;margin-top:.2rem;padding:.28rem .35rem;font:inherit;font-size:.82rem;
+  border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:2px;
+}
+.hint{font-size:.74rem;color:var(--slate);margin:.35rem 0 0;line-height:1.4}
+
+button{
+  font:inherit;font-size:.82rem;padding:.4rem .7rem;
+  border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+  border-radius:2px;cursor:pointer;
+}
+button:hover{border-color:var(--slate)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{
+  outline:2px solid var(--red);outline-offset:1px}
+button.primary{background:var(--red);color:#fff;border-color:var(--red);font-weight:500}
+button.primary:hover{background:#6d1213;border-color:#6d1213}
+
+/* ---------- samples ---------- */
+#samples{margin-top:.7rem}
+#samples h3{
+  font-size:.74rem;font-weight:600;color:var(--slate);margin:0 0 .35rem;
+}
+.sample{
+  border:1px solid var(--rule);background:var(--paper);border-radius:2px;
+  padding:.45rem .55rem;margin-bottom:.4rem;
+}
+.sample b{display:block;font-size:.82rem;font-weight:600}
+.sample span{display:block;font-size:.73rem;color:var(--slate);margin:.1rem 0 .35rem}
+.sample button{width:100%;font-size:.78rem;padding:.28rem}
+.sample.loading button{color:var(--slate)}
+
+/* ---------- sample notes under the panels ---------- */
+#sampleInfo{
+  margin-top:1.4rem;padding-top:.9rem;border-top:1px solid var(--rule);
+  max-width:78ch;
+}
+#sampleInfo h2{font-size:.9rem;margin:0 0 .5rem;font-weight:600}
+#sampleInfo figure{margin:0 0 1rem;border:1px solid var(--rule);padding:.5rem;background:var(--fill)}
+#sampleInfo figure img{display:block;width:100%;height:auto}
+#sampleInfo figcaption{font-size:.76rem;color:var(--slate);margin-top:.45rem;line-height:1.45}
+#sampleInfo .credit{font-size:.72rem;color:var(--slate);margin-top:.3rem;font-style:italic}
+#sampleInfo p{font-size:.82rem;margin:.5rem 0}
+#sampleInfo .refs{font-size:.75rem;color:var(--slate);margin-top:.9rem}
+#sampleInfo .refs h3{font-size:.76rem;color:var(--ink);margin:0 0 .3rem}
+#sampleInfo .refs p{font-size:.75rem;margin:.3rem 0;padding-left:1.4rem;text-indent:-1.4rem}
+.figrow{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+@media (max-width:900px){.figrow{grid-template-columns:1fr}}
+
+/* ---------- file info ---------- */
+.meta{font-size:.78rem;color:var(--slate)}
+.meta table{border-collapse:collapse;width:100%;margin-top:.3rem}
+.meta td{padding:.12rem 0;vertical-align:baseline}
+.meta td:last-child{text-align:right;font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--ink)}
+.meta tr:nth-child(even){background:rgba(0,0,0,.025)}
+
+/* ---------- drop zone ---------- */
+.drop{
+  border:1px dashed var(--rule);background:var(--paper);
+  padding:1.5rem 1rem;text-align:center;border-radius:3px;
+}
+.drop.hot{border-color:var(--red);background:#fdf6f6}
+.drop p{margin:.5rem 0 0;font-size:.78rem;color:var(--slate)}
+.drop .row{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap}
+
+.cropgrid{display:grid;grid-template-columns:1fr 1fr;gap:.3rem .5rem}
+.cropgrid label{display:flex;flex-direction:column;font-size:.76rem;color:var(--slate)}
+.cropgrid input{
+  margin-top:.15rem;padding:.24rem .3rem;font:inherit;font-size:.8rem;
+  font-family:var(--num);font-variant-numeric:tabular-nums;
+  border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:2px;width:100%;
+}
+#cropBox{
+  position:absolute;border:1px solid var(--red);background:rgba(132,22,23,.14);
+  pointer-events:none;display:none;
+}
+.frame.selecting{cursor:crosshair}
+
+/* ---------- panels ---------- */
+.panel{margin-bottom:1.1rem}
+.panel .cap{
+  display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;
+  margin:0 0 .3rem;padding-left:.5rem;
+  border-left:3px solid var(--slate);
+}
+.panel.removed .cap{border-left-color:var(--red)}
+.panel .cap h3{margin:0;font-size:.85rem;font-weight:600}
+.panel.removed .cap h3{color:var(--red)}
+.panel .cap .note{font-size:.76rem;color:var(--slate)}
+.panel .cap .note b{font-family:var(--num);font-weight:500;color:var(--ink)}
+.plot{
+  display:grid;
+  grid-template-columns:58px 1fr 76px;
+  grid-template-rows:1fr 34px;
+  gap:0;
+}
+.plot .yax{grid-column:1;grid-row:1}
+.plot .frame{grid-column:2;grid-row:1}
+.plot .cbar{grid-column:3;grid-row:1;padding-left:6px}
+.plot .xax{grid-column:2;grid-row:2}
+.plot canvas.axis{display:block;width:100%;height:100%}
+.frame{border:1px solid var(--rule);background:var(--fill);position:relative;overflow:hidden}
+.frame canvas{display:block;width:100%;height:100%}
+.readout{
+  position:absolute;right:0;bottom:0;
+  background:rgba(255,255,255,.92);border-left:1px solid var(--rule);border-top:1px solid var(--rule);
+  padding:.15rem .4rem;font-family:var(--num);font-size:.72rem;color:var(--slate);
+  pointer-events:none;
+}
+.empty{
+  display:flex;align-items:center;justify-content:center;
+  height:340px;color:var(--slate);font-size:.85rem;border:1px solid var(--rule);background:var(--fill);
+}
+
+/* ---------- fk spectrum ---------- */
+.fkbox{margin-top:.5rem;border:1px solid var(--rule);background:#fff}
+.fkbox canvas{display:block;width:100%;height:auto}
+.fkcap{font-size:.72rem;color:var(--slate);padding:.2rem .35rem;border-top:1px solid var(--rule)}
+
+/* ---------- footer bits ---------- */
+details{margin-top:.6rem;border-top:1px solid var(--rule);padding-top:.5rem}
+details summary{cursor:pointer;font-size:.8rem;color:var(--slate);font-weight:600}
+details pre{
+  font-family:var(--num);font-size:.68rem;line-height:1.35;color:var(--ink);
+  background:var(--paper);border:1px solid var(--rule);padding:.5rem;overflow:auto;max-height:260px;
+  white-space:pre;margin:.5rem 0 0;
+}
+.caveat{
+  margin-top:1.5rem;padding-top:.75rem;border-top:1px solid var(--rule);
+  font-size:.78rem;color:var(--slate);max-width:62ch;
+}
+.caveat h2{font-size:.82rem;color:var(--ink);margin:0 0 .35rem;font-weight:600}
+.caveat p{margin:.4rem 0}
+.busy{color:var(--red);font-size:.78rem;margin-left:.5rem}
+@media (max-width:820px){
+  .shell{flex-direction:column}
+  .rail{width:auto;flex:none;max-height:none;position:static;border-right:0;border-bottom:1px solid var(--rule)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Kept and Removed</h1>
+  <span class="sub">what seismic filters do to a 2D line</span>
+  <span class="ver" title="build date">v2026.09.03</span>
+  <span class="spacer"></span>
+  <button class="helpmain" data-help="start">Reference</button>
+  <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
+</header>
+
+<div class="shell">
+
+<aside class="rail" id="rail">
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-data" data-pane="data" aria-selected="true">Data<span class="badge" id="badge-data" hidden></span></button>
+    <button role="tab" id="tab-filt" data-pane="filt" aria-selected="false">Filters<span class="badge" id="badge-filt" hidden></span></button>
+    <button role="tab" id="tab-attr" data-pane="attr" aria-selected="false">Attributes<span class="badge" id="badge-attr" hidden></span></button>
+    <button role="tab" id="tab-disp" data-pane="disp" aria-selected="false">Display<span class="badge" id="badge-disp" hidden></span></button>
+  </div>
+
+  <div class="pane on" id="pane-data" role="tabpanel">
+  <div class="group" id="g-file">
+    <h2>File</h2>
+    <div class="drop" id="drop">
+      <div class="row">
+        <button class="primary" id="btnOpen">Choose SEG-Y</button>
+      </div>
+      <p>or drop a .sgy / .segy file here</p>
+      <input type="file" id="fileInput" accept=".sgy,.segy,.SGY,.SEGY" hidden>
+    </div>
+    <div id="samples"></div>
+    <div class="meta" id="meta" hidden>
+      <table id="metaTable"></table>
+      <details id="txtWrap"><summary>Textual header</summary><pre id="txtHdr"></pre></details>
+    </div>
+  </div>
+
+  <div class="group" id="g-crop">
+    <h2>Crop</h2>
+    <p class="hint" style="margin-top:0">Drag a box on the input panel to work on part of the line. Filters run on the crop, so the f-k transform sees only what you selected.</p>
+    <div class="cropgrid">
+      <label>First trace<input type="number" id="ci0" min="0" step="1"></label>
+      <label>Last trace<input type="number" id="ci1" min="0" step="1"></label>
+      <label>Start, ms<input type="number" id="cj0" min="0" step="1"></label>
+      <label>End, ms<input type="number" id="cj1" min="0" step="1"></label>
+    </div>
+    <p class="hint" id="bigNote" hidden style="color:var(--red)">This line is large
+      enough that each filter change takes a few seconds. Cropping to a zone of
+      interest makes the controls responsive.</p>
+    <button id="btnCropReset" style="width:100%;margin-top:.45rem">Reset to whole line</button>
+    <p class="hint" id="cropInfo"></p>
+  </div>
+  </div>
+
+  <div class="pane" id="pane-filt" role="tabpanel">
+  <div class="group off" id="g-fk">
+    <h2>Dip and frequency rejection<button class="help" data-help="fk">Learn more</button></h2>
+    <label class="toggle"><input type="checkbox" id="fkOn"><span>Apply f-k filter</span></label>
+    <div class="body">
+      <div class="ctl">
+        <label>Reject dips steeper than <b><span id="v-dip">0.20</span> smp/tr</b></label>
+        <input type="range" id="dipMax" min="0.02" max="1.5" step="0.01" value="0.20">
+      </div>
+      <div class="ctl">
+        <label>Transition width <b><span id="v-dipTap">0.10</span></b></label>
+        <input type="range" id="dipTap" min="0.01" max="0.6" step="0.01" value="0.10">
+      </div>
+      <div class="ctl">
+        <label>Pass band <b><span id="v-band">0 – 125 Hz</span></b></label>
+        <input type="range" id="fLo" min="0" max="120" step="1" value="0">
+        <input type="range" id="fHi" min="5" max="250" step="1" value="250">
+      </div>
+      <div class="fkbox">
+        <canvas id="fkCanvas" width="260" height="200"></canvas>
+        <div class="fkcap">Amplitude spectrum. Shaded wedges are removed.</div>
+      </div>
+      <p class="hint">Steep coherent events — migration artifacts, ground roll remnants, some multiples — live at high dip. Geologic reflectors on a 2D line are usually well under 0.1 samples per trace.</p>
+    </div>
+  </div>
+
+  <div class="group off" id="g-sos">
+    <h2>Structure-oriented smoothing<button class="help" data-help="sos">Learn more</button></h2>
+    <label class="toggle"><input type="checkbox" id="sosOn"><span>Smooth along reflectors</span></label>
+    <div class="body">
+      <div class="ctl">
+        <label>Smoothing length <b><span id="v-sosLen">7</span> smp</b></label>
+        <input type="range" id="sosLen" min="1" max="24" step="1" value="7">
+      </div>
+      <div class="ctl">
+        <label>Dip estimation window <b><span id="v-sosSig">3.0</span></b></label>
+        <input type="range" id="sosSig" min="0.8" max="8" step="0.1" value="3.0">
+      </div>
+      <div class="ctl">
+        <label>Edge protection <b><span id="v-sosGate">2.0</span></b></label>
+        <input type="range" id="sosGate" min="0" max="6" step="0.1" value="2.0">
+      </div>
+      <div class="ctl">
+        <label>Strength <b><span id="v-sosStr">1.00</span></b></label>
+        <input type="range" id="sosStr" min="0" max="1" step="0.01" value="1.00">
+      </div>
+      <p class="hint">Edge protection holds the filter back where the local image is not linear — at faults, terminations and pinchouts. At 0 it smooths everywhere and will heal real discontinuities.</p>
+    </div>
+  </div>
+
+  <div class="group off" id="g-det">
+    <h2>Detail boost<button class="help" data-help="detail">Learn more</button></h2>
+    <label class="toggle"><input type="checkbox" id="detOn"><span>Split base and detail</span></label>
+    <div class="body">
+      <div class="ctl">
+        <label>Base scale <b><span id="v-detR">4.0</span></b></label>
+        <input type="range" id="detR" min="1" max="20" step="0.5" value="4.0">
+      </div>
+      <div class="ctl">
+        <label>Detail gain <b><span id="v-detG">2.0</span>×</b></label>
+        <input type="range" id="detG" min="0" max="6" step="0.1" value="2.0">
+      </div>
+      <p class="hint">Large-scale amplitude is separated from fine structure and the fine part is rescaled. Above 1× this sharpens thin beds and low-contrast terminations. It will not help with a broad dim zone — that is a large-scale feature and lands in the base. Use AGC for those.</p>
+    </div>
+  </div>
+  </div>
+
+  <div class="pane" id="pane-attr" role="tabpanel">
+  <div class="group" id="g-attr">
+    <h2>Attribute</h2>
+    <div class="ctl">
+      <label for="attrPick">Show
+        <button class="help" id="helpAttr" data-help="start">Learn more</button>
+      </label>
+      <select id="attrPick">
+        <option value="none" selected>None</option>
+        <optgroup label="Complex trace">
+          <option value="envelope">Envelope</option>
+          <option value="insphase">Instantaneous phase</option>
+          <option value="cosphase">Cosine of phase</option>
+          <option value="insfreq">Instantaneous frequency</option>
+          <option value="unwrap">Unwrapped phase</option>
+          <option value="sweetness">Sweetness</option>
+        </optgroup>
+        <optgroup label="Wavelet (response)">
+          <option value="wavfreq">Wavelet frequency</option>
+          <option value="wavphase">Wavelet phase</option>
+          <option value="avgfreq">Average frequency</option>
+          <option value="avgband">Average bandwidth</option>
+        </optgroup>
+        <optgroup label="Energy and amplitude">
+          <option value="rms">RMS amplitude</option>
+          <option value="tke">Teager-Kaiser energy</option>
+          <option value="tkv">Teager-Kaiser variation</option>
+          <option value="avt">Amplitude volume transform</option>
+          <option value="rai">Relative acoustic impedance</option>
+        </optgroup>
+        <optgroup label="Geometric">
+          <option value="dip">Apparent dip</option>
+          <option value="linearity">Linearity</option>
+          <option value="coherence">In-line coherence</option>
+        </optgroup>
+        <optgroup label="Spectral">
+          <option value="band">Spectral band</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="ctl" id="winCtl" hidden>
+      <label>Analysis window <b><span id="v-aw">40</span> ms</b></label>
+      <input type="range" id="attrWin" min="4" max="500" step="2" value="40">
+    </div>
+    <div class="ctl" id="derivCtl" hidden>
+      <label>Derivative filter <b><span id="v-dl">7</span> point</b></label>
+      <input type="range" id="attrDl" min="5" max="9" step="2" value="7">
+    </div>
+    <div class="ctl" id="bandCtl" hidden>
+      <label>Band centre <b><span id="v-fc">20</span> Hz</b></label>
+      <input type="range" id="attrFc" min="4" max="80" step="1" value="20">
+    </div>
+    <div class="ctl">
+      <label for="attrCmap">Color</label>
+      <select id="attrCmap">
+        <option value="magma">Magma</option>
+        <option value="viridis">Viridis</option>
+        <option value="gray">Gray</option>
+        <option value="coolwarm">Blue–white–red</option>
+      </select>
+    </div>
+    <p class="hint" id="attrHint">Attributes are computed on the kept section, so they
+      reflect the filters currently applied. With all filters off they are computed on
+      the data as read.</p>
+  </div>
+  </div>
+
+  <div class="pane" id="pane-disp" role="tabpanel">
+  <div class="group" id="g-disp">
+    <h2>Display</h2>
+    <div class="ctl">
+      <label for="cmap">Color</label>
+      <select id="cmap">
+        <option value="bwr" selected>Blue–white–red</option>
+        <option value="gray">Gray, dark lows</option>
+        <option value="graygb">Gray, dark highs</option>
+        <option value="seis">Blue–black–red</option>
+        <option value="viridis">Viridis</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label>Clip percentile <b><span id="v-clip">98.0</span></b></label>
+      <input type="range" id="clip" min="80" max="100" step="0.1" value="98">
+    </div>
+    <div class="ctl">
+      <label>Gain <b><span id="v-gain">1.00</span>×</b></label>
+      <input type="range" id="gain" min="0.1" max="6" step="0.05" value="1">
+    </div>
+    <div class="ctl">
+      <label>Panel height <b><span id="v-ph">300</span> px</b></label>
+      <input type="range" id="ph" min="140" max="800" step="10" value="300">
+    </div>
+    <div class="ctl">
+      <label>Removed-panel gain <b><span id="v-dgain">4.0</span>×</b></label>
+      <input type="range" id="dgain" min="1" max="40" step="0.5" value="4">
+    </div>
+    <label class="toggle"><input type="checkbox" id="agcOn"><span>AGC, all three panels</span></label>
+    <div class="ctl">
+      <label>AGC window <b><span id="v-agc">500</span> ms</b></label>
+      <input type="range" id="agcWin" min="50" max="2000" step="10" value="500">
+    </div>
+    <p class="hint">AGC and clipping change how amplitudes look but not what the filters did. Relative amplitude is not preserved under AGC.</p>
+  </div>
+
+  <div class="group">
+    <h2>Export</h2>
+    <div class="row" style="display:flex;gap:.4rem;flex-wrap:wrap">
+      <button id="btnPngKept">Save kept panel</button>
+      <button id="btnPngRem">Save removed panel</button>
+      <button id="btnPngAttr">Save attribute panel</button>
+    </div>
+    <button id="btnSegy" style="width:100%;margin-top:.4rem">Save kept data as SEG-Y</button>
+    <button id="btnParams" style="width:100%;margin-top:.4rem">Copy settings text</button>
+    <p class="hint" id="paramOut"></p>
+  </div>
+  </div>
+</aside>
+
+<main class="stage">
+  <div id="panels" hidden>
+    <div class="panel">
+      <div class="cap"><h3>Input</h3><span class="note">as read from the file<span id="decNote"></span></span></div>
+      <div class="plot" id="pf0"><div class="yax"><canvas class="axis" id="yf0"></canvas></div><div class="frame" id="f0"><canvas id="cIn"></canvas><div id="cropBox"></div><div class="readout" id="r0"></div></div><div class="cbar"><canvas class="axis" id="bf0"></canvas></div><div class="xax"><canvas class="axis" id="xf0"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="cap"><h3>Kept</h3><span class="note" id="keptNote">no filters active</span><span class="busy" id="busy" hidden>working…</span></div>
+      <div class="plot" id="pf1"><div class="yax"><canvas class="axis" id="yf1"></canvas></div><div class="frame" id="f1"><canvas id="cKe"></canvas><div class="readout" id="r1"></div></div><div class="cbar"><canvas class="axis" id="bf1"></canvas></div><div class="xax"><canvas class="axis" id="xf1"></canvas></div></div>
+    </div>
+    <div class="panel removed">
+      <div class="cap"><h3>Removed</h3><span class="note">input minus kept, shown at <b id="remGain">4.0×</b> — carries <b id="remPct">0.0%</b> of the input energy</span></div>
+      <div class="plot" id="pf2"><div class="yax"><canvas class="axis" id="yf2"></canvas></div><div class="frame" id="f2"><canvas id="cRe"></canvas><div class="readout" id="r2"></div></div><div class="cbar"><canvas class="axis" id="bf2"></canvas></div><div class="xax"><canvas class="axis" id="xf2"></canvas></div></div>
+    </div>
+
+    <div class="panel" id="attrPanel" hidden>
+      <div class="cap"><h3 id="attrTitle">Attribute</h3><span class="note"
+        id="attrNote"></span></div>
+      <div class="plot" id="pf3"><div class="yax"><canvas class="axis" id="yf3"></canvas></div><div class="frame" id="f3"><canvas id="cAt"></canvas><div class="readout" id="r3"></div></div><div class="cbar"><canvas class="axis" id="bf3"></canvas></div><div class="xax"><canvas class="axis" id="xf3"></canvas></div></div>
+    </div>
+
+    <div id="sampleInfo" hidden></div>
+
+    <div class="caveat">
+      <h2>The removed panel <button class="help" data-help="start">Learn more</button></h2>
+      <p>The removed panel is the arithmetic difference between the input and the kept
+      result, so the two panels sum to the input. Random noise appears there as speckle,
+      coherent noise as organised events at a dip differing from the reflectors, and
+      signal as reflector geometry.</p>
+      <p>Two cases where signal reaches the removed panel: structure-oriented smoothing
+      with edge protection at 0 averages across a discontinuity narrower than the
+      smoothing length, and an f-k dip limit set below the dip of the steepest
+      reflectors rejects them along with the coherent noise.</p>
+    </div>
+  </div>
+
+  <div id="placeholder" class="empty">Load a 2D SEG-Y line, or open the demo, to begin.</div>
+</main>
+
+</div>
+
+<script>
+"use strict";
+
+/* ============================ EBCDIC ============================ */
+const [E2A, A2E] = (() => {
+  const pairs = [];
+  const punct = {64:32,74:91,75:46,76:60,77:40,78:43,79:33,80:38,90:93,91:36,92:42,93:41,
+    94:59,95:94,96:45,97:47,106:124,107:44,108:37,109:95,110:62,111:63,121:96,122:58,
+    123:35,124:64,125:39,126:61,127:34};
+  for (const k in punct) pairs.push([+k, punct[k]]);
+  const seg = [[129,"abcdefghi"],[145,"jklmnopqr"],[162,"stuvwxyz"],
+               [193,"ABCDEFGHI"],[209,"JKLMNOPQR"],[226,"STUVWXYZ"],[240,"0123456789"]];
+  for (const [s0,str] of seg) for (let i=0;i<str.length;i++) pairs.push([s0+i, str.charCodeAt(i)]);
+  const dec = new Uint8Array(256).fill(46);      // unmapped EBCDIC decodes to "."
+  const enc = new Uint8Array(128).fill(64);      // unmapped ASCII encodes to EBCDIC space
+  for (const [e, a] of pairs){ dec[e] = a; enc[a] = e; }
+  return [dec, enc];
+})();
+
+/* ============================ SEG-Y ============================ */
+function ibmToFloat(u){
+  if (u === 0) return 0;
+  const s = (u >>> 31) ? -1 : 1;
+  const e = (u >>> 24) & 0x7f;
+  const m = u & 0x00ffffff;
+  return s * m * Math.pow(16, e - 70);   // 16^(e-64) / 2^24
+}
+
+const BPS = {1:4, 2:4, 3:2, 5:4, 6:8, 8:1, 9:8, 10:4, 11:2, 12:8, 16:1};
+const FMTNAME = {1:"IBM float", 2:"32-bit int", 3:"16-bit int", 5:"IEEE float",
+  6:"IEEE double", 8:"8-bit int", 9:"64-bit int", 10:"32-bit uint", 11:"16-bit uint",
+  12:"64-bit uint", 16:"8-bit uint"};
+
+const MAXCELLS = 5.0e6;   // decimate traces above this
+
+function parseSegy(ab){
+  const dv = new DataView(ab);
+  if (ab.byteLength < 3600) throw new Error("File is shorter than a SEG-Y header. It may not be a SEG-Y file.");
+
+  // Textual header. A card-image header is mostly spaces, so the reliable
+  // discriminator is which space byte dominates: 0x40 in EBCDIC, 0x20 in ASCII.
+  let n40 = 0, n20 = 0;
+  for (let i = 0; i < 3200; i++){
+    const b = dv.getUint8(i);
+    if (b === 0x40) n40++; else if (b === 0x20) n20++;
+  }
+  const isEbcdic = n40 >= n20;
+  let raw = "";
+  for (let i = 0; i < 3200; i++){
+    const b = dv.getUint8(i);
+    raw += String.fromCharCode(isEbcdic ? E2A[b] : (b >= 32 && b < 127 ? b : 46));
+  }
+  const textual = [];
+  for (let i = 0; i < 40; i++) textual.push(raw.slice(i*80, i*80+80).replace(/\s+$/,""));
+
+  // binary header, with endian sniff
+  let big = true;
+  let fmt = dv.getInt16(3224, false), ns = dv.getUint16(3220, false);
+  const sane = (f, n) => BPS[f] !== undefined && n > 0 && n < 200000;
+  if (!sane(fmt, ns)){
+    const f2 = dv.getInt16(3224, true), n2 = dv.getUint16(3220, true);
+    if (sane(f2, n2)){ big = false; fmt = f2; ns = n2; }
+  }
+  if (!sane(fmt, ns)) throw new Error("Could not read a valid format code or sample count from the binary header.");
+
+  let dt  = dv.getUint16(3216, !big);
+  const ext = dv.getInt16(3506, !big);
+  const rev = dv.getUint16(3500, !big);
+
+  const bps = BPS[fmt];
+  const start = 3600 + (ext > 0 ? ext * 3200 : 0);
+  const traceBytes = 240 + ns * bps;
+  let ntr = Math.floor((ab.byteLength - start) / traceBytes);
+  if (ntr < 1) throw new Error("No complete traces found after the headers.");
+
+  // fall back to the first trace header if the binary header disagrees
+  const hns = dv.getUint16(start + 114, !big);
+  if (hns > 0 && hns !== ns && Math.abs((ab.byteLength - start) / (240 + hns*bps) % 1) < 1e-9){
+    ns = hns;
+  }
+  if (dt < 1 || dt > 100000) dt = dv.getUint16(start + 116, !big);
+  if (dt < 1 || dt > 100000) dt = 4000;
+
+  // decimate traces if the line is very large
+  const step = Math.max(1, Math.ceil((ntr * ns) / MAXCELLS));
+  const nx = Math.floor((ntr - 1) / step) + 1;
+
+  const data = new Float32Array(nx * ns);
+  const cdp  = new Int32Array(nx);
+
+  for (let i = 0; i < nx; i++){
+    const h = start + (i * step) * traceBytes;
+    cdp[i] = dv.getInt32(h + 20, !big) || (i + 1);
+    let o = h + 240;
+    const base = i * ns;
+    switch (fmt){
+      case 1:  for (let j=0;j<ns;j++){ data[base+j] = ibmToFloat(dv.getUint32(o,false)); o+=4; } break;
+      case 5:  for (let j=0;j<ns;j++){ data[base+j] = dv.getFloat32(o,!big); o+=4; } break;
+      case 2:  for (let j=0;j<ns;j++){ data[base+j] = dv.getInt32(o,!big); o+=4; } break;
+      case 3:  for (let j=0;j<ns;j++){ data[base+j] = dv.getInt16(o,!big); o+=2; } break;
+      case 8:  for (let j=0;j<ns;j++){ data[base+j] = dv.getInt8(o); o+=1; } break;
+      case 16: for (let j=0;j<ns;j++){ data[base+j] = dv.getUint8(o); o+=1; } break;
+      case 11: for (let j=0;j<ns;j++){ data[base+j] = dv.getUint16(o,!big); o+=2; } break;
+      case 10: for (let j=0;j<ns;j++){ data[base+j] = dv.getUint32(o,!big); o+=4; } break;
+      case 6:  for (let j=0;j<ns;j++){ data[base+j] = dv.getFloat64(o,!big); o+=8; } break;
+      default: throw new Error("Data format code " + fmt + " is not supported.");
+    }
+  }
+  // format 1 IBM is always big-endian words in practice; if the file is
+  // little-endian overall, byte-swap before decoding
+  if (fmt === 1 && !big){
+    for (let i = 0; i < nx; i++){
+      const h = start + (i*step)*traceBytes;
+      let o = h + 240, base = i*ns;
+      for (let j=0;j<ns;j++){ data[base+j] = ibmToFloat(dv.getUint32(o,true)); o+=4; }
+    }
+  }
+  // scrub non-finite samples
+  for (let k = 0; k < data.length; k++) if (!isFinite(data[k])) data[k] = 0;
+
+  return {full: data, fullNx: nx, fullNs: ns, cdpAll: cdp,
+          data, nx, ns, dt, fmt, rev, big, ntrFile: ntr, step, cdp, textual};
+}
+
+/* ============================ FFT ============================ */
+function fftRadix2(re, im, inv){
+  const n = re.length;
+  for (let i=1, j=0; i<n; i++){
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j){ let t=re[i];re[i]=re[j];re[j]=t; t=im[i];im[i]=im[j];im[j]=t; }
+  }
+  for (let len=2; len<=n; len<<=1){
+    const ang = (inv ? 2 : -2) * Math.PI / len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i=0; i<n; i+=len){
+      let cr = 1, ci = 0;
+      for (let k=0; k<len/2; k++){
+        const ur = re[i+k], ui = im[i+k];
+        const vr = re[i+k+len/2]*cr - im[i+k+len/2]*ci;
+        const vi = re[i+k+len/2]*ci + im[i+k+len/2]*cr;
+        re[i+k] = ur+vr; im[i+k] = ui+vi;
+        re[i+k+len/2] = ur-vr; im[i+k+len/2] = ui-vi;
+        const ncr = cr*wr - ci*wi; ci = cr*wi + ci*wr; cr = ncr;
+      }
+    }
+  }
+  if (inv) for (let i=0;i<n;i++){ re[i]/=n; im[i]/=n; }
+}
+const pow2 = n => { let p = 1; while (p < n) p <<= 1; return p; };
+
+let fkCache = null;   // {NX,NZ,re,im} spectrum of the current input
+
+function fkForward(d, nx, nz){
+  const NX = pow2(nx + 16), NZ = pow2(nz + 16);
+  const re = new Float32Array(NX*NZ), im = new Float32Array(NX*NZ);
+  // The data itself is copied untouched; the pad region is filled by
+  // crossfading a mirror of each edge so the periodic image has no step.
+  const cl = (v,n) => v < 0 ? 0 : (v >= n ? n-1 : v);
+  for (let i=0;i<nx;i++) for (let j=0;j<nz;j++) re[i*NZ+j] = d[i*nz+j];
+  for (let i=0;i<nx;i++){                      // pad down the time axis
+    const b = i*NZ;
+    for (let j=nz;j<NZ;j++){
+      const u = (j-nz)/(NZ-nz);
+      re[b+j] = (1-u)*re[b+cl(2*nz-2-j,nz)] + u*re[b+cl(NZ-j,nz)];
+    }
+  }
+  for (let i=nx;i<NX;i++){                     // pad across the trace axis
+    const u = (i-nx)/(NX-nx);
+    const a = cl(2*nx-2-i,nx)*NZ, c = cl(NX-i,nx)*NZ, b = i*NZ;
+    for (let j=0;j<NZ;j++) re[b+j] = (1-u)*re[a+j] + u*re[c+j];
+  }
+  const cr = new Float64Array(NZ), ci = new Float64Array(NZ);
+  for (let i=0;i<NX;i++){
+    for (let j=0;j<NZ;j++){ cr[j]=re[i*NZ+j]; ci[j]=im[i*NZ+j]; }
+    fftRadix2(cr,ci,false);
+    for (let j=0;j<NZ;j++){ re[i*NZ+j]=cr[j]; im[i*NZ+j]=ci[j]; }
+  }
+  const dr = new Float64Array(NX), di = new Float64Array(NX);
+  for (let j=0;j<NZ;j++){
+    for (let i=0;i<NX;i++){ dr[i]=re[i*NZ+j]; di[i]=im[i*NZ+j]; }
+    fftRadix2(dr,di,false);
+    for (let i=0;i<NX;i++){ re[i*NZ+j]=dr[i]; im[i*NZ+j]=di[i]; }
+  }
+  return {NX, NZ, re, im};
+}
+
+// mask value at (fx cycles/trace, fz cycles/sample); 1 = keep
+function fkMaskValue(fx, fz, p){
+  let m = 1;
+  const fHz = Math.abs(fz) / (p.dt * 1e-6);
+  // frequency band, cosine tapered over 10% of the corner
+  const loT = Math.max(1, p.fLo * 0.25), hiT = Math.max(2, p.fHi * 0.15);
+  if (p.fLo > 0){
+    if (fHz <= p.fLo - loT) m = 0;
+    else if (fHz < p.fLo + loT) m *= 0.5 - 0.5*Math.cos(Math.PI*(fHz - p.fLo + loT)/(2*loT));
+  }
+  if (p.fHi < 1e6){
+    if (fHz >= p.fHi + hiT) m = 0;
+    else if (fHz > p.fHi - hiT) m *= 0.5 + 0.5*Math.cos(Math.PI*(fHz - p.fHi + hiT)/(2*hiT));
+  }
+  if (m === 0) return 0;
+  // dip: slope in samples per trace
+  if (Math.abs(fz) < 1e-9) return m;
+  const slope = Math.abs(fx / fz);
+  const a = p.dipMax, w = p.dipTap;
+  if (slope >= a + w) return 0;
+  if (slope > a) m *= 0.5 + 0.5*Math.cos(Math.PI*(slope - a)/w);
+  return m;
+}
+
+function fkApply(spec, nx, nz, p){
+  const {NX, NZ, re, im} = spec;
+  const re2 = new Float32Array(NX*NZ), im2 = new Float32Array(NX*NZ);
+  for (let i=0;i<NX;i++){
+    const fx = (i <= NX/2 ? i : i - NX) / NX;
+    for (let j=0;j<NZ;j++){
+      const fz = (j <= NZ/2 ? j : j - NZ) / NZ;
+      const m = fkMaskValue(fx, fz, p);
+      if (m !== 0){ re2[i*NZ+j] = re[i*NZ+j]*m; im2[i*NZ+j] = im[i*NZ+j]*m; }
+    }
+  }
+  const dr = new Float64Array(NX), di = new Float64Array(NX);
+  for (let j=0;j<NZ;j++){
+    for (let i=0;i<NX;i++){ dr[i]=re2[i*NZ+j]; di[i]=im2[i*NZ+j]; }
+    fftRadix2(dr,di,true);
+    for (let i=0;i<NX;i++){ re2[i*NZ+j]=dr[i]; im2[i*NZ+j]=di[i]; }
+  }
+  const cr = new Float64Array(NZ), ci = new Float64Array(NZ);
+  const out = new Float32Array(nx*nz);
+  for (let i=0;i<NX;i++){
+    for (let j=0;j<NZ;j++){ cr[j]=re2[i*NZ+j]; ci[j]=im2[i*NZ+j]; }
+    fftRadix2(cr,ci,true);
+    if (i < nx) for (let j=0;j<nz;j++) out[i*nz+j] = cr[j];
+  }
+  return out;
+}
+
+/* ============================ filters ============================ */
+function gaussKernel(sigma){
+  const r = Math.max(1, Math.ceil(sigma*3));
+  const k = new Float32Array(2*r+1);
+  let s = 0;
+  for (let i=-r;i<=r;i++){ const v = Math.exp(-i*i/(2*sigma*sigma)); k[i+r]=v; s+=v; }
+  for (let i=0;i<k.length;i++) k[i]/=s;
+  return {k, r};
+}
+function blurSep(src, nx, nz, sigma){
+  const {k, r} = gaussKernel(sigma);
+  const tmp = new Float32Array(nx*nz), out = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    for (let j=0;j<nz;j++){
+      let s=0;
+      for (let m=-r;m<=r;m++){
+        let jj=j+m; if(jj<0) jj=-jj; if(jj>=nz) jj=2*nz-2-jj;
+        s += src[i*nz+jj]*k[m+r];
+      }
+      tmp[i*nz+j]=s;
+    }
+  }
+  for (let j=0;j<nz;j++){
+    for (let i=0;i<nx;i++){
+      let s=0;
+      for (let m=-r;m<=r;m++){
+        let ii=i+m; if(ii<0) ii=-ii; if(ii>=nx) ii=2*nx-2-ii;
+        s += tmp[ii*nz+j]*k[m+r];
+      }
+      out[i*nz+j]=s;
+    }
+  }
+  return out;
+}
+
+function computeTensor(d, nx, nz, sigma){
+  const n = nx*nz;
+  const gx = new Float32Array(n), gz = new Float32Array(n);
+  const at = (i,j) => d[Math.min(nx-1,Math.max(0,i))*nz + Math.min(nz-1,Math.max(0,j))];
+  for (let i=0;i<nx;i++) for (let j=0;j<nz;j++){
+    gx[i*nz+j] = (at(i+1,j-1)+2*at(i+1,j)+at(i+1,j+1) - at(i-1,j-1)-2*at(i-1,j)-at(i-1,j+1))/8;
+    gz[i*nz+j] = (at(i-1,j+1)+2*at(i,j+1)+at(i+1,j+1) - at(i-1,j-1)-2*at(i,j-1)-at(i+1,j-1))/8;
+  }
+  const Jxx = new Float32Array(n), Jxz = new Float32Array(n), Jzz = new Float32Array(n);
+  for (let k=0;k<n;k++){ Jxx[k]=gx[k]*gx[k]; Jxz[k]=gx[k]*gz[k]; Jzz[k]=gz[k]*gz[k]; }
+  const Sxx = blurSep(Jxx,nx,nz,sigma), Sxz = blurSep(Jxz,nx,nz,sigma), Szz = blurSep(Jzz,nx,nz,sigma);
+
+  const dip = new Float32Array(n), lin = new Float32Array(n);
+  for (let k=0;k<n;k++){
+    const a = Sxx[k], b = Sxz[k], c = Szz[k];
+    const tr = a+c, det = Math.sqrt(Math.max((a-c)*(a-c) + 4*b*b, 0));
+    const l1 = 0.5*(tr+det), l2 = 0.5*(tr-det);
+    lin[k] = tr > 1e-20 ? (l1-l2)/(l1+l2+1e-20) : 0;
+    let vx = b, vz = l2 - a;
+    const nrm = Math.hypot(vx, vz);
+    if (nrm < 1e-12){ vx = 1; vz = 0; } else { vx/=nrm; vz/=nrm; }
+    dip[k] = Math.abs(vx) > 1e-12 ? Math.max(-20, Math.min(20, vz/vx)) : 0;
+  }
+  return {dip, lin};
+}
+
+function structureOriented(d, nx, nz, len, sigma, gate, strength, tensor){
+  const n = nx*nz;
+  const T = tensor || computeTensor(d, nx, nz, sigma);
+  const at = (i,j) => d[Math.min(nx-1,Math.max(0,i))*nz + Math.min(nz-1,Math.max(0,j))];
+  const out = new Float32Array(n);
+  const L = Math.max(1, Math.round(len));
+  const sg = L/2;
+  const w = new Float32Array(2*L+1);
+  let ws = 0;
+  for (let m=-L;m<=L;m++){ w[m+L] = Math.exp(-m*m/(2*sg*sg)); ws += w[m+L]; }
+  for (let m=0;m<w.length;m++) w[m]/=ws;
+
+  for (let i=0;i<nx;i++) for (let j=0;j<nz;j++){
+    const k = i*nz+j;
+    const p = T.dip[k], nrm = Math.hypot(1, p);
+    const vx = 1/nrm, vz = p/nrm;
+    let sacc = 0;
+    for (let m=-L;m<=L;m++){
+      const x = i + m*vx, z = j + m*vz;
+      const x0 = Math.floor(x), z0 = Math.floor(z);
+      const fx = x-x0, fz = z-z0;
+      const c00 = at(x0,z0), c10 = at(x0+1,z0), c01 = at(x0,z0+1), c11 = at(x0+1,z0+1);
+      sacc += w[m+L] * ((c00*(1-fx)+c10*fx)*(1-fz) + (c01*(1-fx)+c11*fx)*fz);
+    }
+    const g = gate <= 0 ? 1 : Math.pow(Math.max(0,Math.min(1,T.lin[k])), gate);
+    out[k] = d[k] + strength * g * (sacc - d[k]);
+  }
+  return out;
+}
+
+/* ========================= attributes ========================= */
+/* Analytic signal per trace: FFT along time, keep positive frequencies,
+   inverse. The real part is the input, the imaginary part its Hilbert
+   transform. */
+function analyticSignal(d, nx, nz){
+  // Mirror-padded. A plain FFT treats the trace as periodic, so the jump from
+  // the last sample back to the first acts like a step, and the Hilbert
+  // transform of a step has long tails. Mild on zero-mean seismic, severe on
+  // a strictly positive signal such as an RMS envelope or a Teager-Kaiser
+  // energy, which is exactly what the AVT and TKV steps feed it.
+  const N = pow2(nz*2);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const oR = new Float32Array(nx*nz), oI = new Float32Array(nx*nz);
+  const cl = v => v < 0 ? 0 : (v >= nz ? nz-1 : v);
+  for (let i=0;i<nx;i++){
+    re.fill(0); im.fill(0);
+    for (let j=0;j<nz;j++) re[j] = d[i*nz+j];
+    for (let j=nz;j<N;j++){
+      const u = (j-nz)/(N-nz);
+      re[j] = (1-u)*re[cl(2*nz-2-j)] + u*re[cl(N-j)];
+    }
+    fftRadix2(re, im, false);
+    for (let k=1;k<N/2;k++){ re[k]*=2; im[k]*=2; }
+    for (let k=N/2+1;k<N;k++){ re[k]=0; im[k]=0; }
+    fftRadix2(re, im, true);
+    for (let j=0;j<nz;j++){ oR[i*nz+j]=re[j]; oI[i*nz+j]=im[j]; }
+  }
+  return {re:oR, im:oI};
+}
+
+function attrEnvelope(A){
+  const n = A.re.length, o = new Float32Array(n);
+  for (let k=0;k<n;k++) o[k] = Math.hypot(A.re[k], A.im[k]);
+  return o;
+}
+function attrCosPhase(A){
+  const n = A.re.length, o = new Float32Array(n);
+  for (let k=0;k<n;k++) o[k] = A.re[k] / (Math.hypot(A.re[k], A.im[k]) + 1e-30);
+  return o;
+}
+/* Phase rate dphi/dt, from a spectral derivative of the analytic trace.
+
+   For A = u + i*u_H,  conj(A)*dA/dt = e^2 * (i*dphi/dt + d(ln e)/dt), so
+       dphi/dt = Im(conj(A) * dA/dt) / e^2
+   which is algebraically the same as Taner's chain-rule form
+       (u*u_H' - u_H*u') / (u^2 + u_H^2).
+   Instantaneous frequency is this over 2*pi; the unwrapped phase is its
+   integral. Computing both from one spectral derivative keeps them
+   consistent. A central difference would under-read by sin(w*dt)/(w*dt),
+   nine percent at 60 Hz on 2 ms data. */
+function attrPhaseRate(A, env, nx, nz, dts){
+  const N = pow2(nz*2);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const o = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    const b = i*nz;
+    re.fill(0); im.fill(0);
+    for (let j=0;j<nz;j++){ re[j] = A.re[b+j]; im[j] = A.im[b+j]; }
+    fftRadix2(re, im, false);
+    for (let k=0;k<N;k++){
+      const kk = (k <= N/2 ? k : k-N);
+      const w = 2*Math.PI*kk/(N*dts);
+      const nr = -im[k]*w, ni = re[k]*w;      // multiply by i*w
+      re[k] = nr; im[k] = ni;
+    }
+    fftRadix2(re, im, true);
+    for (let j=0;j<nz;j++){
+      const e2 = env[b+j]*env[b+j] + 1e-30;
+      o[b+j] = (A.re[b+j]*im[j] - A.im[b+j]*re[j]) / e2;
+    }
+  }
+  return o;
+}
+function attrInstFreq(A, env, nx, nz, dts){
+  const r = attrPhaseRate(A, env, nx, nz, dts);
+  const o = new Float32Array(r.length);
+  for (let k=0;k<o.length;k++) o[k] = r[k] / (2*Math.PI);
+  return o;
+}
+
+/* Semblance along the local dip, over a small trace aperture. On a 2D line
+   this is continuity in the line direction only. */
+function attrCoherence(d, dip, nx, nz, winX, winT){
+  const half = (winX-1)>>1;
+  const at = (i,j) => d[Math.min(nx-1,Math.max(0,i))*nz + Math.min(nz-1,Math.max(0,j))];
+  const sum = new Float32Array(nx*nz), sq = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++) for (let j=0;j<nz;j++){
+    const k = i*nz+j, p = dip[k];
+    let s = 0, q = 0;
+    for (let m=-half;m<=half;m++){
+      const z = j + m*p, z0 = Math.floor(z), f = z-z0;
+      const v = at(i+m,z0)*(1-f) + at(i+m,z0+1)*f;
+      s += v; q += v*v;
+    }
+    sum[k] = s; sq[k] = q;
+  }
+  const kk = Math.max(1, winT|0);
+  const box = (src) => {
+    const o = new Float32Array(src.length);
+    for (let i=0;i<nx;i++){
+      const b = i*nz; let acc = 0;
+      for (let j=0;j<nz;j++){
+        acc += src[b+j];
+        if (j >= kk) acc -= src[b+j-kk];
+        o[b + Math.max(0, j-(kk>>1))] = acc / Math.min(j+1, kk);
+      }
+    }
+    return o;
+  };
+  const nsum = new Float32Array(nx*nz);
+  for (let m=0;m<nsum.length;m++) nsum[m] = sum[m]*sum[m];
+  const NU = box(nsum), DE = box(sq);
+  const o = new Float32Array(nx*nz);
+  for (let m=0;m<o.length;m++)
+    o[m] = Math.max(0, Math.min(1, NU[m] / (winX*DE[m] + 1e-30)));
+  return o;
+}
+/* Constant-Q band: Gaussian bandpass, then envelope. */
+function attrSpectralBand(d, nx, nz, dt_s, fc, q){
+  const N = pow2(nz);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const out = new Float32Array(nx*nz);
+  const bw = Math.max(fc/q, 1);
+  const wgt = new Float64Array(N);
+  for (let k=0;k<N;k++){
+    const f = (k <= N/2 ? k : k-N) / (N*dt_s);
+    wgt[k] = Math.exp(-0.5*Math.pow((Math.abs(f)-fc)/bw, 2));
+  }
+  for (let i=0;i<nx;i++){
+    re.fill(0); im.fill(0);
+    for (let j=0;j<nz;j++) re[j] = d[i*nz+j];
+    fftRadix2(re, im, false);
+    for (let k=0;k<N;k++){ re[k]*=wgt[k]; im[k]*=wgt[k]; }
+    for (let k=1;k<N/2;k++){ re[k]*=2; im[k]*=2; }
+    for (let k=N/2+1;k<N;k++){ re[k]=0; im[k]=0; }
+    fftRadix2(re, im, true);
+    for (let j=0;j<nz;j++) out[i*nz+j] = Math.hypot(re[j], im[j]);
+  }
+  return out;
+}
+
+function detailBoost(d, nx, nz, radius, gainD){
+  const base = blurSep(d, nx, nz, radius);
+  const out = new Float32Array(d.length);
+  for (let k=0;k<d.length;k++) out[k] = base[k] + gainD*(d[k]-base[k]);
+  return out;
+}
+
+function agc(d, nx, nz, halfWin){
+  const out = new Float32Array(d.length);
+  const h = Math.max(1, Math.round(halfWin));
+  for (let i=0;i<nx;i++){
+    const base = i*nz;
+    const cum = new Float64Array(nz+1);
+    for (let j=0;j<nz;j++) cum[j+1] = cum[j] + d[base+j]*d[base+j];
+    let gsum = 0;
+    for (let j=0;j<nz;j++){
+      const a = Math.max(0, j-h), b = Math.min(nz, j+h+1);
+      const rms = Math.sqrt((cum[b]-cum[a])/(b-a)) + 1e-12;
+      out[base+j] = d[base+j]/rms;
+      gsum += rms;
+    }
+  }
+  return out;
+}
+
+
+/* ---- Ormsby amplitude response on a frequency axis in Hz ---- */
+function ormsby(f, f1, f2, f3, f4){
+  const a = Math.abs(f);
+  if (a <= f1 || a >= f4) return 0;
+  if (a < f2) return (a - f1) / Math.max(f2 - f1, 1e-12);
+  if (a > f3) return (f4 - a) / Math.max(f4 - f3, 1e-12);
+  return 1;
+}
+
+/* ---- RMS amplitude in a running window (half-height K samples) ---- */
+function attrRMS(d, nx, nz, K){
+  const o = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    const b = i*nz;
+    const c = new Float64Array(nz+1);
+    for (let j=0;j<nz;j++) c[j+1] = c[j] + d[b+j]*d[b+j];
+    for (let j=0;j<nz;j++){
+      const lo = Math.max(0, j-K), hi = Math.min(nz, j+K+1);
+      o[b+j] = Math.sqrt((c[hi]-c[lo]) / (hi-lo));
+    }
+  }
+  return o;
+}
+
+/* ---- Relative acoustic impedance: divide the spectrum by i*w, then Ormsby.
+   Integration rotates the data by -90 degrees, lifts the low frequencies and
+   cuts the high ones; the filter stops noise below the measured spectrum from
+   running away. DC is dropped, since the integration constant is not
+   recoverable and "relative" impedance carries no absolute datum. ---- */
+function attrRAI(d, nx, nz, dts, c1, c2, c3, c4){
+  const N = pow2(nz*2);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const out = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    re.fill(0); im.fill(0);
+    for (let j=0;j<nz;j++) re[j] = d[i*nz+j];
+    fftRadix2(re, im, false);
+    for (let k=0;k<N;k++){
+      const kk = (k <= N/2 ? k : k-N);
+      const f = kk/(N*dts), w = 2*Math.PI*f;
+      if (w === 0){ re[k]=0; im[k]=0; continue; }
+      // divide by i*w  ->  multiply by -i/w
+      const g = ormsby(f, c1, c2, c3, c4) / w;
+      const nr = im[k]*g, ni = -re[k]*g;
+      re[k] = nr; im[k] = ni;
+    }
+    fftRadix2(re, im, true);
+    for (let j=0;j<nz;j++) out[i*nz+j] = re[j];
+  }
+  return out;
+}
+
+/* ---- Amplitude volume transform (Bulhoes, 1999): envelope, RMS of the
+   envelope in a short window, then the inverse Hilbert transform to
+   accentuate vertical change. The result is zero mean. ---- */
+function attrAVT(env, nx, nz, K){
+  const r = attrRMS(env, nx, nz, K);
+  const A = analyticSignal(r, nx, nz);
+  const o = new Float32Array(nx*nz);
+  for (let k=0;k<o.length;k++) o[k] = -A.im[k];
+  return o;
+}
+
+/* ---- Holoborodko smooth noise-robust differentiators ---- */
+const HOLO = {
+  5:[-1,-2,0,2,1].map(v=>v/8),
+  7:[-1,-4,-5,0,5,4,1].map(v=>v/32),
+  9:[-1,-6,-14,-14,0,14,14,6,1].map(v=>v/128)
+};
+function derivHolo(d, nx, nz, dts, len, order){
+  const k = HOLO[len] || HOLO[7], h = (k.length-1)>>1;
+  let cur = d;
+  for (let p=0;p<order;p++){
+    const o = new Float32Array(nx*nz);
+    for (let i=0;i<nx;i++){
+      const b = i*nz;
+      for (let j=0;j<nz;j++){
+        let s = 0;
+        for (let m=-h;m<=h;m++){
+          const jj = Math.min(nz-1, Math.max(0, j+m));
+          s += k[m+h]*cur[b+jj];
+        }
+        o[b+j] = s/dts;
+      }
+    }
+    cur = o;
+  }
+  return cur;
+}
+
+/* ---- Teager-Kaiser energy, continuous form (Kaiser, 1993):
+       TK[x] = (dx/dt)^2 - x * d2x/dt2
+   On the analytic trace the real and imaginary parts each contribute, so the
+   result is twice the real-trace value (Hamila et al., 1999). For A*cos(wt)
+   the real-trace operator returns A^2*w^2 exactly.
+   The Holoborodko filters are low-pass, so the energy reads increasingly low
+   with frequency: on 2 ms data the 7-point filter gives 0.99 of the true
+   derivative at 10 Hz but 0.81 at 45 Hz, so the energy there is ~35% low.
+   That is the price of their noise robustness. ---- */
+function attrTKE(d, nx, nz, dts, len, useComplex){
+  const parts = [];
+  if (useComplex){
+    const A = analyticSignal(d, nx, nz);
+    parts.push(A.re, A.im);
+  } else parts.push(d);
+  const o = new Float32Array(nx*nz);
+  for (const x of parts){
+    const d1 = derivHolo(x, nx, nz, dts, len, 1);
+    const d2 = derivHolo(x, nx, nz, dts, len, 2);
+    for (let k=0;k<o.length;k++) o[k] += d1[k]*d1[k] - x[k]*d2[k];
+  }
+  for (let k=0;k<o.length;k++) if (o[k] < 0) o[k] = 0;
+  return o;
+}
+
+/* ---- Teager-Kaiser variation (Matos, 2018): bandpass the energy, then
+   Hilbert transform it. The energy is non-negative and so cannot feed a
+   coherence computation; the variation is zero mean and can. ---- */
+function attrTKV(tke, nx, nz, dts, c1, c2, c3, c4){
+  const N = pow2(nz*2);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const filt = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    re.fill(0); im.fill(0);
+    for (let j=0;j<nz;j++) re[j] = tke[i*nz+j];
+    fftRadix2(re, im, false);
+    for (let k=0;k<N;k++){
+      const kk = (k <= N/2 ? k : k-N);
+      const g = ormsby(kk/(N*dts), c1, c2, c3, c4);
+      re[k]*=g; im[k]*=g;
+    }
+    fftRadix2(re, im, true);
+    for (let j=0;j<nz;j++) filt[i*nz+j] = re[j];
+  }
+  const A = analyticSignal(filt, nx, nz);
+  const o = new Float32Array(nx*nz);
+  for (let k=0;k<o.length;k++) o[k] = -A.im[k];
+  return o;
+}
+
+/* ---- Wavelet (response) attributes, Bodine (1984): find the local envelope
+   maxima and minima, and assign the value at each maximum to every sample
+   between the adjacent minima. Extrema are only counted where the envelope is
+   a real fraction of the trace peak, or float noise in a dead part of a trace
+   produces hundreds of spurious ones. ---- */
+function attrWavelet(env, src, nx, nz, floorFrac){
+  const o = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    const b = i*nz;
+    let peak = 0;
+    for (let j=0;j<nz;j++) if (env[b+j] > peak) peak = env[b+j];
+    const fl = floorFrac*peak;
+    const mins = [0];
+    for (let j=1;j<nz-1;j++)
+      if (env[b+j] < env[b+j-1] && env[b+j] <= env[b+j+1] && env[b+j] > fl) mins.push(j);
+    mins.push(nz);
+    for (let s=0;s<mins.length-1;s++){
+      const a = mins[s], c = mins[s+1];
+      if (c <= a) continue;
+      let best = a, bv = -1;
+      for (let j=a;j<c;j++) if (env[b+j] > bv){ bv = env[b+j]; best = j; }
+      for (let j=a;j<c;j++) o[b+j] = src[b+best];
+    }
+  }
+  return o;
+}
+
+/* ---- Weighted average frequency and bandwidth (Barnes, 2016). Weighted by
+   instantaneous power within a Hann window:
+       f_avg = sum(w e^2 f)/sum(w e^2),  f_rms = sqrt(sum(w e^2 f^2)/sum(w e^2))
+   The full bandwidth is 2*sigma, twice Barnes's sigma, to match the
+   signal-processing convention. ---- */
+function attrAvgFreq(env, freq, nx, nz, K, wantBandwidth){
+  const n = 2*K+1, w = new Float64Array(n);
+  let ws = 0;
+  for (let m=0;m<n;m++){ w[m] = 0.5 - 0.5*Math.cos(2*Math.PI*(m+1)/(n+1)); ws += w[m]; }
+  for (let m=0;m<n;m++) w[m] /= ws;
+  const o = new Float32Array(nx*nz);
+  for (let i=0;i<nx;i++){
+    const b = i*nz;
+    for (let j=0;j<nz;j++){
+      let sp = 0, spf = 0, spf2 = 0;
+      for (let m=-K;m<=K;m++){
+        const jj = Math.min(nz-1, Math.max(0, j+m));
+        const p = env[b+jj]*env[b+jj]*w[m+K];
+        sp += p; spf += p*freq[b+jj]; spf2 += p*freq[b+jj]*freq[b+jj];
+      }
+      const fa = spf/(sp+1e-30);
+      if (!wantBandwidth){ o[b+j] = fa; continue; }
+      const fr2 = spf2/(sp+1e-30);
+      o[b+j] = 2*Math.sqrt(Math.max(fr2 - fa*fa, 0));
+    }
+  }
+  return o;
+}
+
+/* ---- Unwrapped phase (Vesnaver, 2017). Normalising the complex trace by its
+   envelope gives V = exp(i*phi), so conj(A)*dA/dt = e^2 * i*dphi/dt and the
+   phase derivative can be read off and integrated without ever wrapping. The
+   derivative is spectral: a central difference under-reads by sin(w*dt)/(w*dt),
+   nine percent at 60 Hz on 2 ms data, which integrates into a visible drift. */
+function attrUnwrap(dphi, env, phase, nx, nz, dts){
+  const o = new Float32Array(nx*nz);
+  const up = new Float64Array(nz);
+  for (let i=0;i<nx;i++){
+    const b = i*nz;
+    up[0] = 0;
+    for (let j=1;j<nz;j++) up[j] = up[j-1] + 0.5*(dphi[b+j] + dphi[b+j-1])*dts;
+    // Anchor by the envelope-weighted circular mean of (wrapped - integrated).
+    // Anchoring on one sample is fragile: sample zero is where the Hilbert
+    // transform is least reliable, and on a flat-envelope trace the strongest
+    // sample is arbitrary.
+    let sr = 0, si = 0;
+    for (let j=0;j<nz;j++){
+      const wgt = env[b+j]*env[b+j], dd = phase[b+j] - up[j];
+      sr += wgt*Math.cos(dd); si += wgt*Math.sin(dd);
+    }
+    const off = Math.atan2(si, sr);
+    for (let j=0;j<nz;j++) o[b+j] = up[j] + off;
+  }
+  return o;
+}
+
+/* ============================ display ============================ */
+// control points across the full signed range, low amplitude first
+const CMAPS = {
+  gray:    [[0,0,0],[255,255,255]],
+  graygb:  [[255,255,255],[0,0,0]],
+  bwr:     [[0,0,180],[40,90,255],[255,255,255],[255,90,40],[180,0,0]],
+  seis:    [[0,60,255],[0,0,0],[255,60,0]],
+  viridis: [[68,1,84],[71,44,122],[59,81,139],[44,113,142],[33,144,141],
+            [39,173,129],[92,200,99],[170,220,50],[253,231,37]]
+};
+function buildLUT(name){
+  const cp = CMAPS[name] || CMAPS.gray;
+  const lut = new Uint8ClampedArray(512*3);
+  const seg = cp.length - 1;
+  for (let i=0;i<512;i++){
+    const u = (i/511) * seg;
+    const k = Math.min(seg-1, Math.floor(u)), f = u - k;
+    for (let c=0;c<3;c++) lut[i*3+c] = Math.round(cp[k][c]*(1-f) + cp[k+1][c]*f);
+  }
+  return lut;
+}
+const ACMAPS = {
+  magma:   [[0,0,4],[28,16,68],[79,18,123],[129,37,129],[181,54,122],
+            [229,80,100],[251,135,97],[254,194,135],[252,253,191]],
+  viridis: [[68,1,84],[59,81,139],[33,144,141],[92,200,99],[253,231,37]],
+  gray:    [[0,0,0],[255,255,255]],
+  coolwarm:[[59,76,192],[144,178,254],[221,221,221],[246,161,120],[180,4,38]]
+};
+function buildALUT(name){
+  const cp = ACMAPS[name] || ACMAPS.gray, seg = cp.length-1;
+  const lut = new Uint8ClampedArray(512*3);
+  for (let i=0;i<512;i++){
+    const u = (i/511)*seg, k = Math.min(seg-1, Math.floor(u)), f = u-k;
+    for (let c=0;c<3;c++) lut[i*3+c] = Math.round(cp[k][c]*(1-f) + cp[k+1][c]*f);
+  }
+  return lut;
+}
+function drawRange(canvas, a, nx, nz, vmin, vmax, lut){
+  canvas.width = nx; canvas.height = nz;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(nx, nz), px = img.data;
+  const sc = 511 / ((vmax - vmin) || 1e-30);
+  for (let i=0;i<nx;i++) for (let j=0;j<nz;j++){
+    let t = (a[i*nz+j] - vmin) * sc;
+    t = t < 0 ? 0 : (t > 511 ? 511 : t|0);
+    const o = (j*nx+i)*4;
+    px[o]=lut[t*3]; px[o+1]=lut[t*3+1]; px[o+2]=lut[t*3+2]; px[o+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+}
+function percentile(d, p){
+  const stride = Math.max(1, Math.floor(d.length/200000));
+  const s = [];
+  for (let k=0;k<d.length;k+=stride) if (isFinite(d[k])) s.push(d[k]);
+  if (!s.length) return 1;
+  s.sort((a,b)=>a-b);
+  return s[Math.min(s.length-1, Math.floor(s.length*p/100))];
+}
+function percentileAbs(d, p){
+  const N = d.length;
+  const stride = Math.max(1, Math.floor(N/200000));
+  const s = [];
+  for (let k=0;k<N;k+=stride) s.push(Math.abs(d[k]));
+  if (!s.length) return 1;
+  s.sort((a,b)=>a-b);
+  return s[Math.min(s.length-1, Math.floor(s.length*p/100))] || 1e-9;
+}
+function draw(canvas, d, nx, nz, clipVal, lut){
+  canvas.width = nx; canvas.height = nz;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(nx, nz);
+  const px = img.data;
+  const inv = 1/(clipVal || 1e-9);
+  for (let i=0;i<nx;i++){
+    for (let j=0;j<nz;j++){
+      let t = d[i*nz+j]*inv;
+      if (t > 1) t = 1; else if (t < -1) t = -1;
+      const idx = ((t+1)*255.5)|0;
+      const o = (j*nx+i)*4;
+      px[o]=lut[idx*3]; px[o+1]=lut[idx*3+1]; px[o+2]=lut[idx*3+2]; px[o+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+function drawFK(cv, p, nx, nz, dt){
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0,0,W,H);
+  if (fkCache){
+    const {NX,NZ,re,im} = fkCache;
+    const img = ctx.createImageData(W,H);
+    let mx = 0;
+    const val = (i,j) => Math.hypot(re[i*NZ+j], im[i*NZ+j]);
+    const grid = new Float32Array(W*H);
+    for (let px=0; px<W; px++){
+      const fxi = Math.round((px/(W-1) - 0.5) * NX);
+      const i = ((fxi % NX) + NX) % NX;
+      for (let py=0; py<H; py++){
+        const j = Math.round(py/(H-1) * (NZ/2));
+        const v = Math.log10(1 + val(i, j % NZ));
+        grid[py*W+px] = v; if (v > mx) mx = v;
+      }
+    }
+    for (let k=0;k<W*H;k++){
+      const t = Math.min(1, grid[k]/(mx||1));
+      const v = Math.round(255*(1-t));
+      img.data[k*4]=v; img.data[k*4+1]=v; img.data[k*4+2]=v; img.data[k*4+3]=255;
+    }
+    ctx.putImageData(img,0,0);
+  } else {
+    ctx.fillStyle = "#F4F6F7"; ctx.fillRect(0,0,W,H);
+  }
+  // shade the rejected region
+  ctx.fillStyle = "rgba(132,22,23,0.30)";
+  const nyq = 0.5/(dt*1e-6);
+  for (let px=0; px<W; px++){
+    const fx = (px/(W-1) - 0.5);
+    for (let py=0; py<H; py++){
+      const fz = (py/(H-1)) * 0.5;
+      const m = fkMaskValue(fx, fz, p);
+      if (m < 0.5) ctx.fillRect(px, py, 1, 1);
+    }
+  }
+  ctx.strokeStyle = "#C9CDD2"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+  ctx.fillStyle = "#5C6670"; ctx.font = "10px ui-monospace, monospace";
+  ctx.fillText("0 Hz", 3, 10);
+  ctx.fillText(Math.round(nyq) + " Hz", 3, H-4);
+  ctx.textAlign = "right"; ctx.fillText("+0.5 cyc/tr", W-3, H-4);
+  ctx.textAlign = "left";  ctx.fillText("−0.5", 3, H-16);
+}
+
+
+/* ============================ SEG-Y writer ============================ */
+function writeSegy(d, nx, ns, dt, cdp, startMs, lines){
+  const traceBytes = 240 + ns*4;
+  const buf = new ArrayBuffer(3600 + nx*traceBytes);
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+
+  for (let i = 0; i < 40; i++){
+    const txt = (lines[i] || "").toUpperCase().slice(0, 80).padEnd(80, " ");
+    for (let k = 0; k < 80; k++){
+      const c = txt.charCodeAt(k);
+      u8[i*80 + k] = c < 128 ? A2E[c] : 0x40;
+    }
+  }
+  dv.setInt32(3200, 1, false);                    // job id
+  dv.setInt16(3212, 1, false);                    // traces per ensemble
+  dv.setUint16(3216, dt, false);                  // sample interval
+  dv.setUint16(3218, dt, false);
+  dv.setUint16(3220, ns, false);                  // samples per trace
+  dv.setUint16(3222, ns, false);
+  dv.setInt16(3224, 5, false);                    // IEEE float
+  dv.setInt16(3228, 4, false);                    // CDP ensemble sorting
+  dv.setInt16(3254, 1, false);                    // meters
+  dv.setInt16(3500, 0x0100, false);               // rev 1
+  dv.setInt16(3504, 1, false);                    // fixed length traces
+  dv.setInt16(3506, 0, false);                    // no extended headers
+
+  for (let i = 0; i < nx; i++){
+    const h = 3600 + i*traceBytes;
+    dv.setInt32(h, i+1, false);                   // trace seq within line
+    dv.setInt32(h+4, i+1, false);                 // trace seq within file
+    dv.setInt32(h+20, cdp[i], false);             // CDP number, byte 21
+    dv.setInt16(h+28, 1, false);                  // trace id: seismic data
+    dv.setInt16(h+108, Math.round(startMs), false); // delay recording time, byte 109
+    dv.setUint16(h+114, ns, false);               // samples this trace, byte 115
+    dv.setUint16(h+116, dt, false);               // sample interval, byte 117
+    let o = h + 240;
+    for (let j = 0; j < ns; j++){ dv.setFloat32(o, d[i*ns+j], false); o += 4; }
+  }
+  return buf;
+}
+
+/* ============================ axes ============================ */
+function niceTicks(lo, hi, target){
+  if (!(isFinite(lo) && isFinite(hi))) return [];
+  if (hi === lo) return [lo];
+  const raw = (hi - lo) / Math.max(2, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  const step = (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * mag;
+  const first = Math.ceil(lo / step) * step;
+  const out = [];
+  for (let v = first; v <= hi + step * 1e-6; v += step) out.push(v);
+  return out;
+}
+function fmtTick(v, step){
+  const d = Math.max(0, -Math.floor(Math.log10(Math.abs(step || 1))));
+  if (Math.abs(v) >= 1e5 || (v !== 0 && Math.abs(v) < 1e-3)) return v.toExponential(1);
+  return v.toFixed(Math.min(4, d));
+}
+function fitCanvas(cv){
+  const r = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * dpr));
+  cv.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, r.width, r.height);
+  return {ctx, w: r.width, h: r.height};
+}
+
+function drawYAxis(id, t0, t1, unit){
+  const {ctx, w, h} = fitCanvas($(id));
+  const ticks = niceTicks(t0, t1, Math.max(3, Math.round(h / 55)));
+  const step = ticks.length > 1 ? ticks[1] - ticks[0] : (t1 - t0);
+  ctx.strokeStyle = "#C9CDD2"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(w - 0.5, 0); ctx.lineTo(w - 0.5, h); ctx.stroke();
+  ctx.fillStyle = "#5C6670";
+  ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const v of ticks){
+    const y = (v - t0) / (t1 - t0) * h;
+    if (y < 0 || y > h) continue;
+    ctx.beginPath(); ctx.moveTo(w - 5, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke();
+    ctx.fillText(fmtTick(v, step), w - 8, Math.min(h - 6, Math.max(6, y)));
+  }
+  ctx.save();
+  ctx.translate(11, h / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "10px system-ui, sans-serif"; ctx.fillStyle = "#16191C";
+  ctx.fillText(unit, 0, 0);
+  ctx.restore();
+}
+
+function drawXAxis(id, x0, x1, label){
+  const {ctx, w, h} = fitCanvas($(id));
+  const ticks = niceTicks(x0, x1, Math.max(3, Math.round(w / 90)));
+  const step = ticks.length > 1 ? ticks[1] - ticks[0] : (x1 - x0);
+  ctx.strokeStyle = "#C9CDD2"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 0.5); ctx.lineTo(w, 0.5); ctx.stroke();
+  ctx.fillStyle = "#5C6670";
+  ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const v of ticks){
+    const x = (v - x0) / (x1 - x0) * w;
+    if (x < 0 || x > w) continue;
+    ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, 5); ctx.stroke();
+    ctx.fillText(fmtTick(v, step), Math.min(w - 14, Math.max(14, x)), 7);
+  }
+  ctx.font = "10px system-ui, sans-serif"; ctx.fillStyle = "#16191C";
+  ctx.fillText(label, w / 2, 20);
+}
+
+function drawColorbar(id, vmin, vmax, lut, label){
+  const {ctx, w, h} = fitCanvas($(id));
+  const bw = 13, x = 1, top = 4, bh = Math.max(10, h - 8);
+  const img = ctx.createImageData(1, Math.round(bh));
+  for (let k = 0; k < img.height; k++){
+    const idx = Math.round((1 - k / (img.height - 1 || 1)) * 511);
+    img.data[k*4] = lut[idx*3]; img.data[k*4+1] = lut[idx*3+1];
+    img.data[k*4+2] = lut[idx*3+2]; img.data[k*4+3] = 255;
+  }
+  const tmp = document.createElement("canvas");
+  tmp.width = 1; tmp.height = img.height;
+  tmp.getContext("2d").putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tmp, x, top, bw, bh);
+  ctx.strokeStyle = "#C9CDD2"; ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, top + 0.5, bw, bh);
+
+  const ticks = niceTicks(vmin, vmax, Math.max(2, Math.round(bh / 60)));
+  const step = ticks.length > 1 ? ticks[1] - ticks[0] : (vmax - vmin);
+  ctx.fillStyle = "#5C6670";
+  ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  for (const v of ticks){
+    const y = top + (1 - (v - vmin) / ((vmax - vmin) || 1)) * bh;
+    if (y < top - 1 || y > top + bh + 1) continue;
+    ctx.beginPath(); ctx.moveTo(x + bw, y + 0.5); ctx.lineTo(x + bw + 4, y + 0.5);
+    ctx.stroke();
+    ctx.fillText(fmtTick(v, step), x + bw + 6, Math.min(h - 5, Math.max(5, y)));
+  }
+  if (label){
+    ctx.save();
+    ctx.translate(w - 2, h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "9px system-ui, sans-serif"; ctx.fillStyle = "#16191C";
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }
+}
+
+/* ============================ reference ============================ */
+const HELP = {"start": {"t": "Input, kept, and removed", "c": "concept", "h": "<h3>What the panels show</h3> <p>Each filter separates the data into two parts. The <b>kept</b> panel is the filter output. The <b>removed</b> panel is the arithmetic difference between the input and the kept result, so the two panels sum exactly to the input. A figure below the removed panel gives its share of the input energy.</p> <h3>What appears in the removed panel</h3> <p>Whatever the filter rejected. Random noise appears as speckle with no organisation. Coherent noise appears as organised events, usually at a dip that differs from the reflectors. Signal appears as reflector geometry: layering, terminations, fault planes.</p> <p>The presence of reflector geometry in the removed panel indicates that the filter has rejected part of the signal at the current parameter setting.</p> <h3>Limitations</h3> <p>The removed panel is displayed at its own gain, given on its colour bar, so the visual prominence of the residual is not proportional to its energy. The percentage figure is the quantitative measure.</p>"}, "fk": {"t": "f-k dip and frequency rejection", "c": "filter", "h": "<h3>What it does</h3> <p>A two-dimensional Fourier transform maps the section into wavenumber and frequency. An event with a constant slope on the section maps to a line through the origin of that plane, so events with different dips occupy different regions of it. The filter sets a wedge of that plane to zero and transforms back, removing events steeper than a chosen dip.</p> <p>Dip is expressed in samples per trace, which is independent of sample interval and trace spacing. An event descending one sample every ten traces has a dip of 0.1.</p> <h3>Controls</h3> <p><b>Dip limit</b> sets the boundary of the rejected wedge; events steeper than this are removed. <b>Transition width</b> sets the cosine taper across that boundary, which reduces ringing at the cost of a less sharp separation. <b>Pass band</b> applies a frequency filter on the same transform. The spectrum display shades the rejected region.</p> <h3>In the earth</h3> <p>Reflected energy from subhorizontal interfaces occupies low dips. Steeper dips are occupied by migration artifacts, ground-roll remnants, some multiples, and linear noise trains. On many 2D lines reflectors lie below 0.1 samples per trace, so the separation on dip is clean. Steeply dipping geology, such as crustal thrusts, can reach 0.6 or more and overlaps the range where coherent noise also lies.</p> <h3>Limitations</h3> <p>The filter operates on dip alone and cannot distinguish steep signal from steep noise.</p> <p>The operation is not local. A wedge rejection has an impulse response spanning the whole section, so filtering a crop and cropping a filtered line give different results throughout the crop, not only near its edges.</p>"}, "sos": {"t": "Structure-oriented smoothing", "c": "filter", "h": "<h3>What it does</h3> <p>The local orientation of the image is estimated at every sample from the gradient structure tensor, and the data are averaged along that orientation rather than across it. Energy with a consistent local dip is preserved by the averaging; energy without one is reduced.</p> <p>The same tensor yields a linearity between 0 and 1. The edge-protection control raises linearity to a power and uses it to scale the amount of smoothing applied, so smoothing is reduced where the image has no single dominant orientation.</p> <h3>Controls</h3> <p><b>Smoothing length</b> is the distance along the reflector over which the average is taken. <b>Dip estimation window</b> is the size of the region contributing to the orientation estimate. <b>Edge protection</b> is the exponent applied to linearity; at 0 the smoothing is applied uniformly. <b>Strength</b> scales the whole operation.</p> <h3>In the earth</h3> <p>Reflectors are laterally continuous over distances large compared with the smoothing length, so they survive. Faults, terminations, pinchouts and channel edges are locations where the image has no single orientation, and the linearity gate reduces smoothing there.</p> <h3>Limitations</h3> <p>With edge protection at 0, a discontinuity narrower than the smoothing length is averaged across, producing a continuous reflector where the input contained a break.</p> <p>In a region containing only noise the structure tensor still returns an orientation, and averaging along it produces laterally continuous features that were not present in the input.</p>"}, "detail": {"t": "Detail boost", "c": "filter", "h": "<h3>What it does</h3> <p>A Gaussian-smoothed version of the section is subtracted to give a base and a detail component. The detail is multiplied by a gain and added back to the base.</p> <h3>Controls</h3> <p><b>Base scale</b> is the width of the smoothing that defines the split. Features larger than this go to the base, smaller ones to the detail. <b>Detail gain</b> above 1 amplifies the detail component; below 1 attenuates it.</p> <h3>In the earth</h3> <p>Thin beds, closely spaced reflectors and short terminations are small-scale and fall in the detail component. Regional amplitude variation and broad brightening are large-scale and fall in the base.</p> <h3>Limitations</h3> <p>An amplitude anomaly wider than the base scale is a large-scale feature and is placed in the base, so raising the detail gain does not affect it.</p> <p>The gain is applied to whatever occupies the detail component, including noise and any artifacts introduced by a preceding filter.</p>"}, "envelope": {"t": "Envelope", "c": "attribute", "h": "<h3>What it measures</h3> <p>The magnitude of the analytic trace, formed from the trace and its Hilbert transform. It is the instantaneous amplitude of the seismic signal, independent of phase, so a peak and the adjacent trough of one reflection produce a single envelope maximum rather than two events separated by a null.</p> <h3>High and low values</h3> <p><b>High:</b> large instantaneous amplitude. <b>Low:</b> small instantaneous amplitude. The envelope is bounded below by the absolute value of the trace and is never negative.</p> <h3>In the earth</h3> <p>Amplitude responds to the magnitude of the impedance contrast at an interface, so high envelope commonly corresponds to a large lithology or fluid change. It also rises where reflections from closely spaced interfaces interfere constructively, which occurs at bed thicknesses near a quarter of the dominant wavelength. Gas-charged intervals frequently produce high envelope through the associated impedance reduction.</p> <h3>Limitations</h3> <p>The envelope carries the gain applied to the data, so values at different times or in different surveys are not comparable unless the gain history is known. After AGC the relative amplitude relationships that make the attribute interpretable have been removed.</p> <p>Tuning and a genuine amplitude anomaly both raise the envelope, and the attribute alone does not separate them.</p>"}, "insphase": {"t": "Instantaneous phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The argument of the analytic trace, in radians. It records the position within the wavelet cycle at each sample and contains no amplitude information: a weak reflection and a strong one at the same point in their cycles have the same phase.</p> <h3>High and low values</h3> <p>The quantity is cyclic, so high and low have no interpretive meaning. Zero corresponds to a peak, ±π to a trough, and ±π/2 to a zero crossing. The information is in the lateral continuity of the phase bands rather than in their values.</p> <h3>In the earth</h3> <p>Because amplitude is normalised out, reflections of any strength are displayed equally, so phase bands follow bedding continuously across intervals where amplitude varies. Lateral breaks in a phase band occur at faults, unconformities and stratigraphic terminations.</p> <h3>Limitations</h3> <p>The value jumps from +π to −π once per cycle. These discontinuities appear as lateral bands in the display and originate in the representation, not in the data. Cosine of phase and unwrapped phase are formulations without them.</p> <p>Where the envelope approaches zero the phase is determined by whatever is present, including noise, and varies rapidly.</p>"}, "cosphase": {"t": "Cosine of instantaneous phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The cosine of the instantaneous phase. It carries the same information as the phase but as a continuous quantity between −1 and +1, with no wrap discontinuity. It is the seismic trace with its amplitude normalised to unity everywhere.</p> <h3>High and low values</h3> <p><b>+1:</b> a peak. <b>−1:</b> a trough. <b>0:</b> a zero crossing. All reflections are displayed at the same strength regardless of their amplitude.</p> <h3>In the earth</h3> <p>The display follows bedding continuity into intervals where reflections are too weak to see on an amplitude section, which makes it used for tracing horizons through low-amplitude zones and for identifying terminations and onlap geometry.</p> <h3>Limitations</h3> <p>Amplitude normalisation applies equally to noise. In an interval with low signal-to-noise ratio, the attribute displays noise at the same strength as signal and produces banding with no reflection origin. The envelope indicates where the signal is strong enough for the display to be meaningful.</p>"}, "insfreq": {"t": "Instantaneous frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>The time derivative of the instantaneous phase, divided by 2π, in Hz. It estimates the dominant frequency of the signal at each individual sample rather than averaged over a window.</p> <h3>High and low values</h3> <p><b>High:</b> the local waveform is oscillating rapidly. <b>Low:</b> it is oscillating slowly. The estimate can take negative values, which have no physical interpretation as a frequency.</p> <h3>In the earth</h3> <p>Frequency content relates to bed thickness, since thinner beds produce interference patterns with higher dominant frequency, and to attenuation, which removes high frequencies preferentially with depth and with path length through absorptive material. Localised low-frequency zones beneath high-amplitude reflections have been associated with gas, though scattering, thin-bed interference and tuning also produce them.</p> <h3>Limitations</h3> <p>The estimate is a ratio whose denominator is the squared envelope. Where the envelope approaches zero the ratio is unstable, and the attribute takes very large positive and negative values. On a typical section around a third of samples fall outside the range 0 to Nyquist, with excursions of several orders of magnitude. This behaviour is a property of the definition rather than an artifact of a particular implementation.</p> <p>Wavelet frequency and average frequency are stabilised measurements of the same quantity.</p>"}, "unwrap": {"t": "Unwrapped phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous phase accumulated continuously along the trace rather than folded into the interval ±π. The phase derivative is integrated directly, so the result never wraps. Its slope at any point equals 2π times the instantaneous frequency.</p> <h3>High and low values</h3> <p>The absolute value depends on an arbitrary integration constant and is not interpretable. The interpretable quantity is the local gradient: a steeper gradient corresponds to a higher instantaneous frequency.</p> <h3>In the earth</h3> <p>Departures of the gradient from its regional trend indicate intervals where the frequency content differs from its surroundings, arising from the same causes as for instantaneous frequency: bed thickness, attenuation and interference.</p> <h3>Limitations</h3> <p>The attribute is an integral, so an error in the phase derivative at one time propagates to every later sample. Absolute levels deep in a record accumulate the errors above them.</p>"}, "sweetness": {"t": "Sweetness", "c": "attribute", "h": "<h3>What it measures</h3> <p>The envelope divided by the square root of the instantaneous frequency. It is a composite of two other attributes and increases with amplitude and decreases with frequency.</p> <h3>High and low values</h3> <p><b>High:</b> high amplitude, low frequency, or both. <b>Low:</b> low amplitude, high frequency, or both.</p> <h3>In the earth</h3> <p>Radovich and Oliveros (1998) observed in the Gulf of Mexico that sandy facies embedded in a shale matrix frequently show both higher envelope and lower instantaneous frequency than the surrounding shale, and combined the two into this single quantity for that reason. The association is empirical and was established in a particular geological setting.</p> <h3>Limitations</h3> <p>Because the two contributions multiply, a high value can arise from either alone. A tuned reflector of ordinary frequency and a weak low-frequency interval can produce the same value. The envelope and frequency examined separately distinguish these cases.</p> <p>The attribute inherits the gain dependence of the envelope.</p>"}, "wavfreq": {"t": "Wavelet frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>Also called response frequency. The envelope maxima are located, and the instantaneous frequency at each maximum is assigned to every sample between the adjacent envelope minima. The result is one frequency value per reflection event, constant across that event.</p> <p>The reasoning, from Bodine (1984), is that most of the energy in a trace lies near the envelope peaks, which is where the frequency estimate is best conditioned.</p> <h3>High and low values</h3> <p><b>High:</b> a rapidly oscillating reflection event. <b>Low:</b> a slowly oscillating one. The range is bounded in practice because the estimate is taken only where the envelope is large.</p> <h3>In the earth</h3> <p>The same relationships as for instantaneous frequency: bed thickness and attenuation. The measurement is expressed per event rather than per sample.</p> <h3>Limitations</h3> <p>The display is piecewise constant by construction and cannot resolve variation within a single reflection event.</p>"}, "wavphase": {"t": "Wavelet phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous phase at each envelope maximum, assigned to every sample between the adjacent envelope minima. It describes the phase character of each reflection event with one value.</p> <h3>High and low values</h3> <p><b>Near 0:</b> the event is centred on a peak, consistent with a zero-phase wavelet and a positive reflection coefficient. <b>Near ±π:</b> centred on a trough, consistent with a negative reflection coefficient. <b>Near ±π/2:</b> the event is not centred on either, which occurs for non-zero-phase wavelets and for thin-bed responses.</p> <h3>In the earth</h3> <p>A lateral change from near 0 to near ±π along one reflector is consistent with a polarity reversal, which occurs where the sign of the impedance contrast changes, as at a fluid contact or a lateral facies change.</p> <h3>Limitations</h3> <p>Wavelet phase also varies with the phase of the source wavelet left by processing, which can vary spatially. A phase change measured on one reflector does not by itself establish a change in reflection coefficient.</p>"}, "avgfreq": {"t": "Average frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous frequency averaged over a window and weighted by instantaneous power, so samples with strong signal contribute in proportion to their energy and samples with none contribute little. Following Barnes (2016).</p> <h3>High and low values</h3> <p><b>High:</b> the energy in the window is concentrated at higher frequencies. <b>Low:</b> at lower frequencies. The weighting keeps the estimate within the data bandwidth in normal circumstances.</p> <h3>In the earth</h3> <p>Average frequency declines with depth in most sections as the earth attenuates high frequencies along the travel path. Departures from that regional trend indicate local change: thinner bedding raises it, and absorptive or scattering intervals lower it.</p> <h3>Limitations</h3> <p>The window length determines what is measured. A short window follows individual reflection events; a long one characterises intervals. Values from different window lengths are not comparable.</p>"}, "avgband": {"t": "Average bandwidth", "c": "attribute", "h": "<h3>What it measures</h3> <p>The spread of the power-weighted instantaneous frequency distribution within the window, expressed as twice its standard deviation. Where average frequency gives the centre of that distribution, bandwidth gives its width.</p> <h3>High and low values</h3> <p><b>High:</b> the instantaneous frequency varies substantially within the window. <b>Low:</b> it is close to constant.</p> <h3>In the earth</h3> <p>Variation in instantaneous frequency within a window arises from interference between reflections at different spacings, so high bandwidth commonly corresponds to thinly interbedded or heterogeneous intervals. Low bandwidth corresponds to isolated reflections and to monotonous sections.</p> <h3>Limitations</h3> <p>The convention used here is the full bandwidth, twice the standard deviation. Barnes (2016) defines the bandwidth as the standard deviation itself, so values differ by a factor of two between the two conventions.</p> <p>The measurement describes the variation of the instantaneous frequency, which is not the same quantity as the width of the amplitude spectrum. A signal composed of two symmetric tones has a constant instantaneous frequency and therefore near-zero bandwidth by this measure, while its amplitude spectrum is wide.</p>"}, "rms": {"t": "RMS amplitude", "c": "attribute", "h": "<h3>What it measures</h3> <p>The root mean square of the trace within a running window. It is the square root of the mean power in the window.</p> <h3>High and low values</h3> <p><b>High:</b> large mean power in the window. <b>Low:</b> small mean power. The quantity is never negative.</p> <h3>In the earth</h3> <p>Intervals containing many strong reflections read high, and intervals with few or weak reflections read low. On deep reflection data this is the measurement underlying descriptions of crust as reflective or transparent.</p> <h3>Limitations</h3> <p>The window length changes the result. A window comparable to the wavelet length approaches the envelope and follows individual reflections; a longer window characterises intervals.</p> <p>The measurement includes noise, so an interval can read high because its signal-to-noise ratio is low rather than because it contains reflections. Measures based on spatial coherence separate the two.</p> <p>Like all amplitude measurements, it carries the applied gain.</p>"}, "tke": {"t": "Teager-Kaiser energy", "c": "attribute", "h": "<h3>What it measures</h3> <p>The square of the first time derivative of the trace, minus the product of the trace and its second derivative. For a signal of amplitude A and angular frequency ω the operator returns A²ω² exactly.</p> <p>Kaiser (1990) derived it from the energy of a mass on a spring. The seismic energy density given by Sheriff and Geldart (1995) has the same dependence on amplitude and frequency, which is the basis for using the operator as an estimator of it. The attribute therefore responds to amplitude and frequency jointly, unlike RMS amplitude, which responds to amplitude alone.</p> <p>Applied to the analytic trace, the real and imaginary parts each contribute A²ω², so the complex-trace result is twice the real-trace value (Hamila et al., 1999).</p> <h3>High and low values</h3> <p><b>High:</b> large amplitude, high frequency, or both. <b>Low:</b> small amplitude, low frequency, or both. The output is non-negative. Two reflections of equal amplitude but different frequency give different values.</p> <h3>In the earth</h3> <p>The attribute is high where strong reflections coincide with well-resolved, higher-frequency character, and low in weak or attenuated intervals. Because it is a squared quantity its own frequency content is lower than that of the input, so it mixes vertically over a longer interval than the reflection data.</p> <h3>Limitations</h3> <p>The output is non-negative and therefore has a non-zero mean, which prevents its use as input to coherence and similar attributes. The Teager-Kaiser variation is the zero-mean formulation.</p> <p>The derivatives are computed with smooth noise-robust filters, which are low-pass by construction and under-estimate the derivative as frequency rises. On 2 ms data the 7-point filter returns 0.988 of the true derivative at 10 Hz and 0.806 at 45 Hz, so the energy, being quadratic in the derivative, reads about 35 percent low at 45 Hz. Values are therefore not directly comparable across widely separated frequencies. A shorter filter reduces the effect and is less resistant to noise.</p>"}, "tkv": {"t": "Teager-Kaiser variation", "c": "attribute", "h": "<h3>What it measures</h3> <p>The Teager-Kaiser energy, bandpass filtered and then Hilbert transformed. The filtering removes the non-zero mean and the Hilbert transform converts the result into an oscillatory quantity. Following Matos (2018).</p> <h3>High and low values</h3> <p>The quantity oscillates about zero. Zero crossings occur where the underlying energy changes most rapidly with time, so the transitions rather than the extrema mark the boundaries between intervals of differing energy.</p> <h3>In the earth</h3> <p>Boundaries between packages of differing reflection energy: the tops and bases of reflective intervals, unconformities, and lateral changes in reflection character.</p> <h3>Limitations</h3> <p>Its frequency content is lower than that of the input, so it resolves less detail.</p> <p>Polarity information is lost at the energy step, so the sign of the output derives from the transform rather than from the reflection coefficient.</p>"}, "avt": {"t": "Amplitude volume transform", "c": "attribute", "h": "<h3>What it measures</h3> <p>Three operations, from Bulhões (1999). The envelope is computed, its RMS is taken in a short window, and an inverse Hilbert transform is applied to that RMS envelope. The last step converts a smooth non-negative quantity into an oscillatory zero-mean one that responds to vertical change in the energy.</p> <h3>High and low values</h3> <p>The quantity oscillates about zero. Zero crossings mark where the RMS envelope changes most rapidly with time, so the display outlines the boundaries of energy packages rather than their interiors.</p> <h3>In the earth</h3> <p>The attribute was developed for mapping structural and stratigraphic features and is applied to faults, channels, carbonate bodies, unconformities and reflector terminations, all of which involve abrupt vertical or lateral change in reflection energy.</p> <h3>Limitations</h3> <p>The output has lower frequency content than the input. The window length controls this: shorter windows retain more detail and more noise.</p> <p>Polarity is discarded at the envelope step, so the sign of the output is a property of the transform rather than of the reflection coefficient.</p>"}, "rai": {"t": "Relative acoustic impedance", "c": "attribute", "h": "<h3>What it measures</h3> <p>The trace integrated with respect to time in the frequency domain, then bandpass filtered. Seismic amplitude approximates the reflection coefficient, which is a function of the change in acoustic impedance across an interface; integration recovers a quantity proportional to the impedance of the layer itself, within the seismic bandwidth.</p> <p>Integration divides the spectrum by iω, which rotates the phase by −90 degrees, amplifies low frequencies and attenuates high ones. The bandpass filter limits the amplification of frequencies below those present in the data.</p> <h3>High and low values</h3> <p><b>High:</b> higher acoustic impedance relative to the surrounding section. <b>Low:</b> lower. The phase rotation places layer boundaries at zero crossings and layer interiors at extrema, so the display represents layers rather than contacts.</p> <h3>In the earth</h3> <p>Acoustic impedance is the product of velocity and density, so high values commonly correspond to carbonates, tight or cemented sands and other consolidated lithologies, and low values to shales, porous sands and gas-charged intervals.</p> <h3>Limitations</h3> <p>The integration constant is not recoverable and the low frequencies are absent from seismic data, so the result is relative within the passband and has no absolute datum. Two intervals of genuinely different impedance can display the same level.</p> <p>The derivation assumes a zero-phase wavelet approximating a spike and small reflection coefficients. Departures from these assumptions, particularly residual wavelet phase, are carried into the result.</p>"}, "dip": {"t": "Apparent dip", "c": "attribute", "h": "<h3>What it measures</h3> <p>The local slope of the reflectors in samples per trace, taken from the eigenvector of the gradient structure tensor associated with the smaller eigenvalue. This is the same estimate that steers the structure-oriented smoothing.</p> <h3>High and low values</h3> <p>The sign gives the direction of dip within the plane of the section and the magnitude its steepness. Zero is a horizontal event.</p> <h3>In the earth</h3> <p>Smoothly varying dip maps folds and regional structural gradient. Abrupt lateral changes in dip occur at faults, and angular relationships between dip domains occur at unconformities.</p> <h3>Limitations</h3> <p>On a 2D line the quantity is apparent dip in the direction of the line. A reflector dipping partly out of the plane of the section reads shallower than its true dip, and the true dip cannot be recovered without a second azimuth.</p> <p>Where no coherent event is present the tensor still returns an orientation. The linearity attribute indicates where the dip estimate is supported by the data.</p>"}, "linearity": {"t": "Linearity", "c": "attribute", "h": "<h3>What it measures</h3> <p>The difference of the two structure-tensor eigenvalues divided by their sum, giving a value between 0 and 1. It quantifies how strongly the local image is dominated by a single orientation.</p> <h3>High and low values</h3> <p><b>Near 1:</b> the image has one clear orientation, as for a well-defined reflector. <b>Near 0:</b> no preferred orientation, as for random noise, chaotic reflection character, or the intersection of events with different dips.</p> <h3>In the earth</h3> <p>High linearity corresponds to continuous layered reflections. Low linearity corresponds to disrupted zones, chaotic facies such as mass transport deposits, and intervals where the signal-to-noise ratio is low.</p> <h3>Limitations</h3> <p>Low linearity does not distinguish geological disruption from noise, since neither has a dominant orientation.</p>"}, "coherence": {"t": "In-line coherence", "c": "attribute", "h": "<h3>What it measures</h3> <p>Semblance computed along the local dip across a small group of adjacent traces. It is the ratio of the energy of the summed traces to the summed energy of the individual traces, and quantifies waveform similarity between neighbouring traces once their dip has been accounted for.</p> <h3>High and low values</h3> <p><b>Near 1:</b> adjacent traces are similar, corresponding to a laterally continuous reflection. <b>Low:</b> adjacent traces differ. Unlike most attributes, the low values carry the structural information.</p> <h3>In the earth</h3> <p>Lateral waveform change occurs at faults, channel margins, reef edges, and stratigraphic terminations, all of which produce low coherence.</p> <h3>Limitations</h3> <p>On a 2D line the measurement is made only along the line. A fault striking parallel to the section produces no waveform difference between adjacent traces on the same side of it and is not detected. This is the principal reason coherence is normally computed on 3D volumes.</p> <p>Low signal-to-noise ratio reduces trace similarity and lowers coherence independently of structure.</p>"}, "band": {"t": "Spectral band", "c": "attribute", "h": "<h3>What it measures</h3> <p>The envelope of a single narrow frequency band, isolated with a constant-Q Gaussian filter so that the time resolution scales with the centre frequency. Stepping the centre frequency through the data bandwidth shows how energy is distributed across frequency.</p> <h3>High and low values</h3> <p><b>High:</b> substantial energy at that frequency at that location. <b>Low:</b> little. Values from different bands are comparable only within the range where the data carries energy.</p> <h3>In the earth</h3> <p>A bed reaches maximum reflection amplitude at the frequency whose quarter wavelength matches its thickness, so thin beds are most prominent in higher bands and thicker beds in lower ones. Comparison across bands is therefore sensitive to layer thickness. Intervals bright at low frequency and weak at high frequency indicate preferential loss of high frequencies, which arises from absorption, from scattering in heterogeneous media, and from thin-bed interference.</p> <h3>Limitations</h3> <p>Bands outside the range where the data has energy contain mostly noise. The spectrum shown in the f-k display gives the range within which band comparison is meaningful.</p>"}};
+const HELP_ORDER = ["start", "fk", "sos", "detail", "envelope", "insphase", "cosphase", "insfreq", "unwrap", "sweetness", "wavfreq", "wavphase", "avgfreq", "avgband", "rms", "tke", "tkv", "avt", "rai", "dip", "linearity", "coherence", "band"];
+
+/* Reference text opens in its own window, so it can sit beside the tool while
+   the controls are being worked. One window is reused for every topic. */
+function helpDocument(){
+  const groups = [["concept","How to read this tool"],
+                  ["filter","Filters"],
+                  ["attribute","Attributes"]];
+  let nav = "", body = "";
+  for (const [cat, label] of groups){
+    const keys = HELP_ORDER.filter(k => HELP[k].c === cat);
+    if (!keys.length) continue;
+    nav += "<h4>" + label + "</h4><ul>";
+    for (const k of keys){
+      nav += '<li><a href="#' + k + '">' + HELP[k].t + "</a></li>";
+      body += '<section id="' + k + '"><h2>' + HELP[k].t + "</h2>" + HELP[k].h +
+              '<p class="back"><a href="#top">Back to the top</a></p></section>';
+    }
+    nav += "</ul>";
+  }
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Kept and Removed \u2014 reference</title>
+<style>
+:root{--ink:#16191C;--slate:#5C6670;--rule:#C9CDD2;--fill:#F4F6F7;--red:#841617}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color:var(--ink);background:#fff}
+header{padding:1rem 1.4rem .8rem;border-bottom:1px solid var(--rule);background:var(--fill)}
+header h1{margin:0;font-size:1rem;font-weight:600}
+header p{margin:.2rem 0 0;font-size:.82rem;color:var(--slate)}
+main{padding:1.2rem 1.4rem 4rem;max-width:64ch}
+nav{padding:1rem 1.4rem;border-bottom:1px solid var(--rule);font-size:.86rem}
+nav h4{margin:.7rem 0 .25rem;font-size:.74rem;color:var(--slate);font-weight:600}
+nav h4:first-child{margin-top:0}
+nav ul{margin:0;padding-left:1.1rem}
+nav li{margin:.12rem 0}
+nav a{color:var(--ink);text-decoration:none}
+nav a:hover{color:var(--red);text-decoration:underline}
+section{padding-top:1.2rem;margin-bottom:2rem;border-top:1px solid var(--rule)}
+section:first-of-type{border-top:0;padding-top:0}
+h2{font-size:1rem;color:var(--red);margin:0 0 .5rem;
+  letter-spacing:.06em;text-transform:uppercase}
+h3{font-size:.86rem;margin:1.1rem 0 .3rem}
+p{margin:.55rem 0}
+b{font-weight:600}
+.back{font-size:.78rem}
+.back a{color:var(--slate)}
+:target{animation:flash 1.4s ease-out}
+@keyframes flash{from{background:#fdf2f2}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){:target{animation:none}}
+</style></head><body id="top">
+<header><h1>Kept and Removed \u2014 reference</h1>
+<p>What each control and attribute does, and how to read the result.</p></header>
+<nav>${nav}</nav><main>${body}</main></body></html>`;
+}
+
+let helpWin = null;
+function openHelp(key){
+  if (!HELP[key]) key = "start";
+  if (!helpWin || helpWin.closed){
+    helpWin = window.open("", "kr-reference",
+      "width=720,height=860,scrollbars=yes,resizable=yes");
+    if (!helpWin){ alert("The reference window was blocked. Allow pop-ups for this page."); return; }
+  }
+  helpWin.document.open();
+  helpWin.document.write(helpDocument());
+  helpWin.document.close();
+  const el = helpWin.document.getElementById(key);
+  if (el) el.scrollIntoView();
+  helpWin.focus();
+}
+
+/* ============================ app ============================ */
+const $ = id => document.getElementById(id);
+let SEG = null, KEPT = null, timer = null;
+let TENSOR = null, ATTR = null, ATTRKEY = "";
+let CROP = null;   // {i0, i1, j0, j1} in full-grid indices, i1/j1 exclusive
+
+function readParams(){
+  return {
+    fkOn: $("fkOn").checked,
+    dipMax: +$("dipMax").value, dipTap: +$("dipTap").value,
+    fLo: +$("fLo").value,
+    fHi: (+$("fHi").value >= +$("fHi").max) ? 1e6 : +$("fHi").value,
+    sosOn: $("sosOn").checked,
+    sosLen: +$("sosLen").value, sosSig: +$("sosSig").value,
+    sosGate: +$("sosGate").value, sosStr: +$("sosStr").value,
+    detOn: $("detOn").checked, detR: +$("detR").value, detG: +$("detG").value,
+    cmap: $("cmap").value, clip: +$("clip").value, gain: +$("gain").value,
+    dgain: +$("dgain").value, ph: +$("ph").value,
+    agcOn: $("agcOn").checked, agcWin: +$("agcWin").value,
+    attr: $("attrPick").value, attrFc: +$("attrFc").value,
+    attrWin: +$("attrWin").value, attrDl: +$("attrDl").value,
+    attrCmap: $("attrCmap").value,
+    dt: SEG ? SEG.dt : 4000
+  };
+}
+function syncLabels(){
+  const p = readParams();
+  $("v-dip").textContent = p.dipMax.toFixed(2);
+  $("v-dipTap").textContent = p.dipTap.toFixed(2);
+  $("v-band").textContent = p.fLo + " – " + (p.fHi > 1e5 ? "Nyquist" : p.fHi) + " Hz";
+  $("v-sosLen").textContent = p.sosLen;
+  $("v-sosSig").textContent = p.sosSig.toFixed(1);
+  $("v-sosGate").textContent = p.sosGate.toFixed(1);
+  $("v-sosStr").textContent = p.sosStr.toFixed(2);
+  $("v-detR").textContent = p.detR.toFixed(1);
+  $("v-detG").textContent = p.detG.toFixed(1);
+  $("v-clip").textContent = p.clip.toFixed(1);
+  $("v-gain").textContent = p.gain.toFixed(2);
+  $("v-ph").textContent = p.ph;
+  $("v-dgain").textContent = p.dgain.toFixed(1);
+  $("v-agc").textContent = p.agcWin;
+  $("v-fc").textContent = p.attrFc;
+  $("v-aw").textContent = p.attrWin;
+  $("v-dl").textContent = p.attrDl;
+  const ha = $("helpAttr");
+  ha.dataset.help = (p.attr === "none") ? "start" : p.attr;
+  ha.textContent = (p.attr === "none") ? "Learn more" : "About this attribute";
+  syncBadges();
+  $("remGain").textContent = p.dgain.toFixed(1) + "×";
+  $("g-fk").classList.toggle("off", !p.fkOn);
+  $("g-sos").classList.toggle("off", !p.sosOn);
+  $("g-det").classList.toggle("off", !p.detOn);
+}
+
+function runFilters(){
+  if (!SEG) return;
+  const p = readParams();
+  const {nx, ns} = SEG;
+  let d = SEG.data;
+
+  if (p.fkOn){
+    if (!fkCache) fkCache = fkForward(SEG.data, nx, ns);
+    d = fkApply(fkCache, nx, ns, p);
+  }
+  TENSOR = computeTensor(d, nx, ns, p.sosSig);
+  if (p.sosOn) d = structureOriented(d, nx, ns, p.sosLen, p.sosSig, p.sosGate,
+                                     p.sosStr, TENSOR);
+  if (p.detOn) d = detailBoost(d, nx, ns, p.detR, p.detG);
+  KEPT = d;
+
+  const names = [];
+  if (p.fkOn) names.push("f-k");
+  if (p.sosOn) names.push("structure-oriented smoothing");
+  if (p.detOn) names.push("detail boost");
+  $("keptNote").textContent = names.length ? names.join(", then ") : "no filters active";
+
+  ATTRKEY = "";
+  computeAttribute();
+  redraw();
+}
+
+function computeAttribute(){
+  const p = readParams();
+  if (!SEG || !KEPT || p.attr === "none"){ ATTR = null; return; }
+  const key = [p.attr, p.attrFc, p.attrWin, p.attrDl].join("|");
+  if (key === ATTRKEY && ATTR) return;
+  const {nx, ns, dt} = SEG, dts = dt * 1e-6;
+  let a, title, cmapDefault = "magma", vmin = null, vmax = null, unit = "";
+
+  if (p.attr === "dip"){
+    a = TENSOR.dip;
+    const m = Math.max(Math.abs(percentile(a, 2)), Math.abs(percentile(a, 98)), 0.05);
+    vmin = -m; vmax = m; cmapDefault = "coolwarm";
+    title = "Apparent dip";
+    unit = "samples per trace, in the line direction only";
+  } else if (p.attr === "linearity"){
+    a = TENSOR.lin; vmin = 0; vmax = 1; cmapDefault = "viridis";
+    title = "Linearity";
+    unit = "0 where the image has no preferred orientation, 1 where it is layered";
+  } else if (p.attr === "coherence"){
+    a = attrCoherence(KEPT, TENSOR.dip, nx, ns, 5, 15);
+    vmin = 0; vmax = 1; cmapDefault = "viridis";
+    title = "In-line semblance coherence";
+    unit = "continuity along the line only; a fault striking with the line will not show";
+  } else if (p.attr === "rms"){
+    a = attrRMS(KEPT, nx, ns, Math.max(1, Math.round(p.attrWin*1e-3/dts/2)));
+    vmin = 0; vmax = percentile(a, 99);
+    title = "RMS amplitude";
+    unit = "running window of +/-" + (p.attrWin/2).toFixed(0) + " ms";
+  } else if (p.attr === "rai"){
+    const nyq = 0.5/dts;
+    a = attrRAI(KEPT, nx, ns, dts, 5, 10, Math.min(60, nyq*0.5),
+                Math.min(70, nyq*0.6));
+    const m1 = Math.max(Math.abs(percentile(a,1)), Math.abs(percentile(a,99)));
+    vmin = -m1; vmax = m1; cmapDefault = "coolwarm";
+    title = "Relative acoustic impedance";
+    unit = "trace integration, Ormsby 5-10-60-70 Hz; band-limited, no absolute datum";
+  } else if (p.attr === "tke" || p.attr === "tkv"){
+    const tke = attrTKE(KEPT, nx, ns, dts, p.attrDl, true);
+    if (p.attr === "tke"){
+      a = tke; vmin = 0; vmax = percentile(a, 99);
+      title = "Teager-Kaiser energy";
+      unit = "complex trace, " + p.attrDl + "-point derivative; reads low at high frequency";
+    } else {
+      const nyq = 0.5/dts;
+      a = attrTKV(tke, nx, ns, dts, 5, 10, Math.min(60, nyq*0.5),
+                  Math.min(70, nyq*0.6));
+      const m2 = Math.max(Math.abs(percentile(a,1)), Math.abs(percentile(a,99)));
+      vmin = -m2; vmax = m2; cmapDefault = "coolwarm";
+      title = "Teager-Kaiser variation";
+      unit = "bandpassed energy, then Hilbert; zero mean, so it can feed coherence";
+    }
+  } else if (p.attr === "band"){
+    a = attrSpectralBand(KEPT, nx, ns, dts, p.attrFc, 3.0);
+    vmin = 0; vmax = percentile(a, 99);
+    title = p.attrFc + " Hz band envelope";
+    unit = "constant-Q Gaussian band, then envelope";
+  } else {
+    const A = analyticSignal(KEPT, nx, ns);
+    if (p.attr === "avt"){
+      a = attrAVT(attrEnvelope(A), nx, ns,
+                  Math.max(1, Math.round(p.attrWin*1e-3/dts/2)));
+      const m3 = Math.max(Math.abs(percentile(a,1)), Math.abs(percentile(a,99)));
+      vmin = -m3; vmax = m3; cmapDefault = "coolwarm";
+      title = "Amplitude volume transform";
+      unit = "RMS envelope over +/-" + (p.attrWin/2).toFixed(0) +
+             " ms, then inverse Hilbert; zero mean";
+    } else if (p.attr === "insphase"){
+      a = new Float32Array(nx*ns);
+      for (let k=0;k<a.length;k++) a[k] = Math.atan2(A.im[k], A.re[k]);
+      vmin = -Math.PI; vmax = Math.PI; cmapDefault = "coolwarm";
+      title = "Instantaneous phase";
+      unit = "radians; wraps at +/-pi";
+    } else if (p.attr === "unwrap"){
+      const e0 = attrEnvelope(A);
+      const ph = new Float32Array(nx*ns);
+      for (let k=0;k<ph.length;k++) ph[k] = Math.atan2(A.im[k], A.re[k]);
+      a = attrUnwrap(attrPhaseRate(A, e0, nx, ns, dts), e0, ph, nx, ns, dts);
+      vmin = percentile(a, 1); vmax = percentile(a, 99); cmapDefault = "viridis";
+      title = "Unwrapped phase";
+      unit = "radians, integrated without wrapping (Vesnaver, 2017)";
+    } else if (p.attr === "wavfreq" || p.attr === "wavphase" ||
+               p.attr === "avgfreq" || p.attr === "avgband"){
+      const e1 = attrEnvelope(A);
+      const f1 = attrInstFreq(A, e1, nx, ns, dts);
+      if (p.attr === "wavfreq"){
+        a = attrWavelet(e1, f1, nx, ns, 1e-3);
+        vmin = 0; vmax = Math.min(0.5/dts, percentile(a, 98));
+        cmapDefault = "viridis";
+        title = "Wavelet frequency";
+        unit = "Hz, held constant between envelope minima (Bodine, 1984)";
+      } else if (p.attr === "wavphase"){
+        const ph1 = new Float32Array(nx*ns);
+        for (let k=0;k<ph1.length;k++) ph1[k] = Math.atan2(A.im[k], A.re[k]);
+        a = attrWavelet(e1, ph1, nx, ns, 1e-3);
+        vmin = -Math.PI; vmax = Math.PI; cmapDefault = "coolwarm";
+        title = "Wavelet phase";
+        unit = "radians, taken at the envelope peak of each lobe";
+      } else {
+        const K = Math.max(1, Math.round(p.attrWin*1e-3/dts/2));
+        a = attrAvgFreq(e1, f1, nx, ns, K, p.attr === "avgband");
+        cmapDefault = "viridis";
+        if (p.attr === "avgfreq"){
+          vmin = 0; vmax = Math.min(0.5/dts, percentile(a, 98));
+          title = "Average frequency";
+          unit = "Hz, power-weighted over +/-" + (p.attrWin/2).toFixed(0) + " ms";
+        } else {
+          vmin = 0; vmax = percentile(a, 98);
+          title = "Average bandwidth";
+          unit = "Hz, 2*sigma of the power-weighted frequency distribution";
+        }
+      }
+    } else if (p.attr === "envelope"){
+      a = attrEnvelope(A); vmin = 0; vmax = percentile(a, 99);
+      title = "Envelope";
+      unit = "instantaneous amplitude, insensitive to polarity";
+    } else if (p.attr === "cosphase"){
+      a = attrCosPhase(A); vmin = -1; vmax = 1; cmapDefault = "gray";
+      title = "Cosine of instantaneous phase";
+      unit = "every event at equal strength, so weak ones show alongside bright ones";
+    } else if (p.attr === "insfreq"){
+      a = attrInstFreq(A, attrEnvelope(A), nx, ns, dts);
+      vmin = percentile(a, 2); vmax = percentile(a, 98);
+      cmapDefault = "viridis";
+      title = "Instantaneous frequency";
+      unit = "Hz; unstable wherever the envelope is small, which is most of a deep record";
+    } else if (p.attr === "sweetness"){
+      const e = attrEnvelope(A);
+      const f = attrInstFreq(A, e, nx, ns, dts);
+      a = new Float32Array(e.length);
+      for (let k=0;k<a.length;k++) a[k] = e[k] / Math.sqrt(Math.max(Math.abs(f[k]), 1));
+      vmin = 0; vmax = percentile(a, 99);
+      title = "Sweetness";
+      unit = "envelope divided by the square root of frequency";
+    }
+  }
+  const CBLAB = {envelope:"amplitude", cosphase:"cos phase", insfreq:"Hz",
+                 dip:"samples/trace", linearity:"linearity",
+                 coherence:"semblance", sweetness:"sweetness",
+                 band:"amplitude", rms:"amplitude", rai:"impedance",
+                 tke:"energy", tkv:"variation", avt:"AVT",
+                 insphase:"radians", unwrap:"radians", wavfreq:"Hz",
+                 wavphase:"radians", avgfreq:"Hz", avgband:"Hz"};
+  ATTR = {a, title, unit, vmin, vmax, cmapDefault, cbLabel: CBLAB[p.attr] || ""};
+  ATTRKEY = key;
+}
+
+function redraw(){
+  if (!SEG || !KEPT) return;
+  const p = readParams();
+  const {nx, ns, dt} = SEG;
+  const lut = buildLUT(p.cmap);
+  const h = Math.max(1, Math.round(p.agcWin/2 / (dt*1e-3)));
+
+  let din = SEG.data, dke = KEPT;
+  const drm = new Float32Array(nx*ns);
+  for (let k=0;k<drm.length;k++) drm[k] = SEG.data[k] - KEPT[k];
+
+  // energy accounting on the unscaled arrays
+  let ein=0, erm=0;
+  for (let k=0;k<drm.length;k++){ ein += SEG.data[k]*SEG.data[k]; erm += drm[k]*drm[k]; }
+  $("remPct").textContent = (100*Math.sqrt(erm/(ein||1))).toFixed(1) + "%";
+
+  let drmD = drm;
+  if (p.agcOn){ din = agc(din,nx,ns,h); dke = agc(dke,nx,ns,h); drmD = agc(drm,nx,ns,h); }
+
+  const clip = percentileAbs(din, p.clip) / p.gain;
+  draw($("cIn"), din, nx, ns, clip, lut);
+  draw($("cKe"), dke, nx, ns, clip, lut);
+  draw($("cRe"), drmD, nx, ns, clip / p.dgain, lut);
+
+  for (const id of ["pf0","pf1","pf2"]) $(id).style.height = (p.ph + 34) + "px";
+
+  $("bandCtl").hidden = (p.attr !== "band");
+  $("winCtl").hidden = !["rms","avt","avgfreq","avgband"].includes(p.attr);
+  $("derivCtl").hidden = !["tke","tkv"].includes(p.attr);
+  if (ATTR){
+    $("attrPanel").hidden = false;
+    $("pf3").style.height = (p.ph + 34) + "px";
+    $("attrTitle").textContent = ATTR.title;
+    $("attrNote").textContent = ATTR.unit;
+    const useDefault = !$("attrCmap").dataset.touched;
+    const cm = useDefault ? ATTR.cmapDefault : p.attrCmap;
+    if (useDefault) $("attrCmap").value = cm;
+    drawRange($("cAt"), ATTR.a, nx, ns, ATTR.vmin, ATTR.vmax, buildALUT(cm));
+  } else {
+    $("attrPanel").hidden = true;
+  }
+  if ($("fkOn").checked) drawFK($("fkCanvas"), p, nx, ns, dt);
+  drawAllAxes(clip, lut, p);
+}
+
+function drawAllAxes(clip, lut, p){
+  if (!SEG) return;
+  const {nx, ns, dt, cdp} = SEG;
+  const j0 = SEG.j0 || 0;
+  const ms0 = j0 * dt * 1e-3, ms1 = (j0 + ns - 1) * dt * 1e-3;
+  // seconds for long records, milliseconds for short ones
+  const useSec = (ms1 - ms0) >= 4000;
+  const t0 = useSec ? ms0 / 1000 : ms0, t1 = useSec ? ms1 / 1000 : ms1;
+  const tunit = useSec ? "two-way time (s)" : "two-way time (ms)";
+  const x0 = cdp[0], x1 = cdp[nx - 1];
+  const monotone = nx > 1 && Math.abs(x1 - x0) >= nx - 1;
+  const xlab = monotone ? "CDP" : "trace";
+  const xa = monotone ? x0 : 1, xb = monotone ? x1 : nx;
+
+  const panels = [["f0", clip, lut, "amplitude"],
+                  ["f1", clip, lut, "amplitude"],
+                  ["f2", clip / p.dgain, lut, "amplitude"]];
+  for (const [id, c, L, cl] of panels){
+    if ($("p" + id).offsetHeight < 5) continue;
+    drawYAxis("y" + id, t0, t1, tunit);
+    drawXAxis("x" + id, xa, xb, xlab);
+    drawColorbar("b" + id, -c, c, L, cl);
+  }
+  if (ATTR && !$("attrPanel").hidden){
+    drawYAxis("yf3", t0, t1, tunit);
+    drawXAxis("xf3", xa, xb, xlab);
+    const cm = $("attrCmap").dataset.touched ? p.attrCmap : ATTR.cmapDefault;
+    drawColorbar("bf3", ATTR.vmin, ATTR.vmax, buildALUT(cm), ATTR.cbLabel || "");
+  }
+}
+
+function schedule(){
+  syncLabels();
+  clearTimeout(timer);
+  $("busy").hidden = false;
+  // A 20 s crustal line is a few million samples and the filter chain takes
+  // seconds, so hold off longer before recomputing while a slider is moving.
+  const cells = SEG ? SEG.nx * SEG.ns : 0;
+  const wait = cells > 1.2e6 ? 600 : (cells > 4e5 ? 300 : 140);
+  timer = setTimeout(() => {
+    runFilters();
+    $("busy").hidden = true;
+  }, wait);
+}
+function scheduleDisplay(){ syncLabels(); redraw(); }
+
+/* ---- wiring ---- */
+for (const id of ["dipMax","dipTap","fLo","fHi","sosLen","sosSig","sosGate","sosStr","detR","detG"])
+  $(id).addEventListener("input", schedule);
+for (const id of ["fkOn","sosOn","detOn"]) $(id).addEventListener("change", () => { schedule(); });
+for (const id of ["cmap","clip","gain","dgain","ph","agcOn","agcWin"])
+  $(id).addEventListener("input", scheduleDisplay);
+$("attrCmap").addEventListener("change", e => {
+  e.target.dataset.touched = "1"; scheduleDisplay();
+});
+for (const id of ["attrPick","attrFc","attrWin","attrDl"])
+  $(id).addEventListener("input", () => {
+    syncLabels();
+    $("busy").hidden = false;
+    setTimeout(() => { computeAttribute(); redraw(); $("busy").hidden = true; }, 10);
+  });
+
+
+function applyCrop(){
+  if (!SEG) return;
+  const {i0, i1, j0, j1} = CROP;
+  const nx = i1 - i0, ns = j1 - j0;
+  const out = new Float32Array(nx*ns);
+  for (let i = 0; i < nx; i++)
+    for (let j = 0; j < ns; j++) out[i*ns+j] = SEG.full[(i0+i)*SEG.fullNs + (j0+j)];
+  SEG.data = out; SEG.nx = nx; SEG.ns = ns; SEG.j0 = j0;
+  SEG.cdp = SEG.cdpAll.slice(i0, i1);
+  fkCache = null; KEPT = null;
+  const ms = v => Math.round(v*SEG.dt*1e-3);
+  $("ci0").value = i0; $("ci1").value = i1-1;
+  $("cj0").value = ms(j0); $("cj1").value = ms(j1-1);
+  const whole = (i0 === 0 && j0 === 0 && i1 === SEG.fullNx && j1 === SEG.fullNs);
+  $("cropInfo").textContent = whole
+    ? "Whole line: " + nx + " traces, " + ns + " samples."
+    : nx + " of " + SEG.fullNx + " traces (cdp " + SEG.cdp[0] + "–" + SEG.cdp[nx-1] + "), " +
+      ns + " samples, " + ms(j0) + "–" + ms(j1-1) + " ms.";
+}
+function resetCrop(){
+  if (!SEG) return;
+  CROP = {i0:0, i1:SEG.fullNx, j0:0, j1:SEG.fullNs};
+  applyCrop(); runFilters();
+}
+function cropFromFields(){
+  if (!SEG) return;
+  const smp = v => Math.round(v/(SEG.dt*1e-3));
+  let i0 = Math.round(+$("ci0").value), i1 = Math.round(+$("ci1").value) + 1;
+  let j0 = smp(+$("cj0").value), j1 = smp(+$("cj1").value) + 1;
+  i0 = Math.max(0, Math.min(SEG.fullNx-2, i0));
+  i1 = Math.max(i0+2, Math.min(SEG.fullNx, i1));
+  j0 = Math.max(0, Math.min(SEG.fullNs-2, j0));
+  j1 = Math.max(j0+2, Math.min(SEG.fullNs, j1));
+  CROP = {i0, i1, j0, j1};
+  applyCrop(); runFilters();
+}
+for (const id of ["ci0","ci1","cj0","cj1"]) $(id).addEventListener("change", cropFromFields);
+$("btnCropReset").addEventListener("click", resetCrop);
+
+/* drag a box on the input panel */
+(function(){
+  const fr = $("f0"), box = $("cropBox");
+  let x0 = 0, y0 = 0, dragging = false;
+  const pos = e => { const r = fr.getBoundingClientRect();
+    return [Math.max(0, Math.min(r.width, e.clientX - r.left)),
+            Math.max(0, Math.min(r.height, e.clientY - r.top)), r]; };
+  fr.addEventListener("mousedown", e => {
+    if (!SEG || e.button !== 0) return;
+    const [x, y] = pos(e); x0 = x; y0 = y; dragging = true;
+    fr.classList.add("selecting");
+    box.style.display = "block"; box.style.left = x + "px"; box.style.top = y + "px";
+    box.style.width = "0px"; box.style.height = "0px";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const [x, y] = pos(e);
+    box.style.left = Math.min(x, x0) + "px"; box.style.top = Math.min(y, y0) + "px";
+    box.style.width = Math.abs(x - x0) + "px"; box.style.height = Math.abs(y - y0) + "px";
+  });
+  window.addEventListener("mouseup", e => {
+    if (!dragging) return;
+    dragging = false; fr.classList.remove("selecting"); box.style.display = "none";
+    const [x, y, r] = pos(e);
+    if (Math.abs(x - x0) < 6 || Math.abs(y - y0) < 6) return;   // ignore a stray click
+    const fi = v => CROP.i0 + Math.round(v/r.width  * SEG.nx);
+    const fj = v => CROP.j0 + Math.round(v/r.height * SEG.ns);
+    let i0 = fi(Math.min(x, x0)), i1 = fi(Math.max(x, x0));
+    let j0 = fj(Math.min(y, y0)), j1 = fj(Math.max(y, y0));
+    CROP = {i0: Math.max(0, i0), i1: Math.min(SEG.fullNx, Math.max(i0+2, i1)),
+            j0: Math.max(0, j0), j1: Math.min(SEG.fullNs, Math.max(j0+2, j1))};
+    applyCrop(); runFilters();
+  });
+})();
+
+/* ---- hover readout ---- */
+function attachReadout(frameId, canvasId, roId, getArr){
+  const fr = $(frameId), ro = $(roId);
+  fr.addEventListener("mousemove", e => {
+    if (!SEG) return;
+    const r = fr.getBoundingClientRect();
+    const i = Math.min(SEG.nx-1, Math.max(0, Math.floor((e.clientX-r.left)/r.width*SEG.nx)));
+    const j = Math.min(SEG.ns-1, Math.max(0, Math.floor((e.clientY-r.top)/r.height*SEG.ns)));
+    const a = getArr();
+    const t = ((j + (SEG.j0||0))*SEG.dt*1e-3).toFixed(0);
+    ro.textContent = "cdp " + SEG.cdp[i] + "   " + t + " ms   " +
+      (a ? a[i*SEG.ns+j].toExponential(2) : "—");
+  });
+  fr.addEventListener("mouseleave", () => { ro.textContent = ""; });
+}
+attachReadout("f0","cIn","r0", () => SEG && SEG.data);
+attachReadout("f1","cKe","r1", () => KEPT);
+attachReadout("f3","cAt","r3", () => ATTR && ATTR.a);
+attachReadout("f2","cRe","r2", () => {
+  if (!SEG || !KEPT) return null;
+  const d = new Float32Array(SEG.data.length);
+  for (let k=0;k<d.length;k++) d[k] = SEG.data[k]-KEPT[k];
+  return d;
+});
+
+/* ---- loading ---- */
+function showMeta(s, filename, bytes){
+  const rows = [
+    ["File", filename],
+    ["Size", (bytes/1048576).toFixed(2) + " MB"],
+    ["Traces in file", s.ntrFile],
+    ["Traces shown", s.nx + (s.step > 1 ? " (every " + s.step + ")" : "")],
+    ["Samples/trace", s.ns],
+    ["Sample interval", (s.dt/1000).toFixed(3) + " ms"],
+    ["Record length", ((s.ns-1)*s.dt/1000).toFixed(0) + " ms"],
+    ["Nyquist", (500000/s.dt).toFixed(1) + " Hz"],
+    ["Format", s.fmt + " — " + (FMTNAME[s.fmt] || "?")],
+    ["Byte order", s.big ? "big-endian" : "little-endian"],
+    ["SEG-Y revision", (s.rev >> 8) + "." + (s.rev & 0xff)]
+  ];
+  $("metaTable").innerHTML = rows.map(r => "<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>").join("");
+  $("txtHdr").textContent = s.textual.join("\n");
+  $("meta").hidden = false;
+  $("decNote").textContent = s.step > 1 ? " — decimated to every " + s.step + " traces for display" : "";
+}
+
+function load(s, filename, bytes){
+  SEG = s; KEPT = null; fkCache = null;
+  $("fHi").max = Math.round(500000/s.dt);
+  if (+$("fHi").value > +$("fHi").max) $("fHi").value = $("fHi").max;
+  CROP = {i0:0, i1:s.fullNx, j0:0, j1:s.fullNs};
+  const big = s.fullNx * s.fullNs > 1.2e6;
+  $("bigNote").hidden = !big;
+  $("ci0").max = s.fullNx-1; $("ci1").max = s.fullNx-1;
+  $("cj0").max = Math.round((s.fullNs-1)*s.dt*1e-3);
+  $("cj1").max = $("cj0").max;
+  applyCrop();
+  showMeta(s, filename, bytes);
+  $("placeholder").hidden = true;
+  $("panels").hidden = false;
+  syncLabels();
+  runFilters();
+}
+
+function handleFile(file){
+  const rd = new FileReader();
+  rd.onload = () => {
+    try { load(parseSegy(rd.result), file.name, file.size); showSampleInfo(null); }
+    catch (err){ $("placeholder").hidden = false; $("panels").hidden = true;
+      $("placeholder").textContent = "Could not read this file. " + err.message; }
+  };
+  rd.onerror = () => { $("placeholder").textContent = "The file could not be read from disk."; };
+  rd.readAsArrayBuffer(file);
+}
+$("btnOpen").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+const drop = $("drop");
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.add("hot"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.remove("hot"); }));
+drop.addEventListener("drop", e => { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => e.preventDefault());
+
+/* ---- export ---- */
+function savePng(canvas, name){
+  const a = document.createElement("a");
+  a.download = name; a.href = canvas.toDataURL("image/png"); a.click();
+}
+$("btnPngKept").addEventListener("click", () => savePng($("cKe"), "kept.png"));
+$("btnPngRem").addEventListener("click", () => savePng($("cRe"), "removed.png"));
+$("btnPngAttr").addEventListener("click", () => {
+  if (ATTR) savePng($("cAt"), ATTR.title.toLowerCase().replace(/[^a-z0-9]+/g,"_") + ".png");
+});
+$("btnSegy").addEventListener("click", () => {
+  if (!SEG || !KEPT) return;
+  const p = readParams();
+  const bits = [];
+  if (p.fkOn) bits.push("F-K REJECT |DIP| > " + p.dipMax.toFixed(2) + " SMP/TR, TAPER " + p.dipTap.toFixed(2));
+  if (p.fkOn && (p.fLo > 0 || p.fHi < 1e5)) bits.push("BAND " + p.fLo + "-" + (p.fHi > 1e5 ? "NYQ" : p.fHi) + " HZ");
+  if (p.sosOn) bits.push("STRUCTURE-ORIENTED SMOOTHING LEN " + p.sosLen + ", SIGMA " + p.sosSig.toFixed(1) +
+    ", EDGE PROTECTION " + p.sosGate.toFixed(1) + ", STRENGTH " + p.sosStr.toFixed(2));
+  if (p.detOn) bits.push("DETAIL BOOST BASE SIGMA " + p.detR.toFixed(1) + ", GAIN " + p.detG.toFixed(1));
+  if (!bits.length) bits.push("NO FILTERS APPLIED");
+  const startMs = Math.round(CROP.j0 * SEG.dt * 1e-3);
+  const lines = ["C 1 PROCESSED WITH KEPT AND REMOVED (SEISMIC-IMAGE-FILTERS)",
+                 "C 2 HBEDLE-SUBSURFACE.GITHUB.IO/SEISMIC-IMAGE-FILTERS",
+                 "C 3 OUTPUT IS THE KEPT PANEL. AMPLITUDES AS FILTERED, NO AGC OR CLIP APPLIED.",
+                 "C 4 TRACES " + SEG.nx + "  SAMPLES " + SEG.ns + "  INTERVAL " + (SEG.dt/1000).toFixed(3) + " MS",
+                 "C 5 START TIME " + startMs + " MS  CDP " + SEG.cdp[0] + " TO " + SEG.cdp[SEG.nx-1],
+                 "C 6 FORMAT 5 IEEE FLOAT, BIG-ENDIAN, SEG-Y REV 1",
+                 "C 7"];
+  bits.forEach((b, k) => { lines.push("C" + String(8+k).padStart(2) + " " + b); });
+  lines.push("C" + String(8+bits.length).padStart(2) + " ");
+  lines.push("C" + String(9+bits.length).padStart(2) + " ORIGINAL FILE HEADER LINE 1 FOLLOWS:");
+  lines.push("C" + String(10+bits.length).padStart(2) + " " + (SEG.textual[0] || "").slice(0, 74));
+  const ab = writeSegy(KEPT, SEG.nx, SEG.ns, SEG.dt, SEG.cdp, startMs, lines);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([ab], {type: "application/octet-stream"}));
+  a.download = "kept.sgy"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+$("btnParams").addEventListener("click", () => {
+  const p = readParams();
+  const bits = [];
+  if (p.fkOn) bits.push("f-k: reject |dip| > " + p.dipMax.toFixed(2) + " smp/tr, taper " +
+    p.dipTap.toFixed(2) + "; band " + p.fLo + "-" + p.fHi + " Hz");
+  if (p.sosOn) bits.push("structure-oriented smoothing: length " + p.sosLen + " smp, tensor sigma " +
+    p.sosSig.toFixed(1) + ", edge protection " + p.sosGate.toFixed(1) + ", strength " + p.sosStr.toFixed(2));
+  if (p.detOn) bits.push("detail boost: base sigma " + p.detR.toFixed(1) + ", gain " + p.detG.toFixed(1) + "x");
+  bits.push("display: " + p.cmap + ", clip " + p.clip.toFixed(1) + " pct, gain " + p.gain.toFixed(2) +
+    "x" + (p.agcOn ? ", AGC " + p.agcWin + " ms" : ""));
+  const txt = "Kept and Removed — " + bits.join(" | ");
+  $("paramOut").textContent = txt;
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{});
+});
+
+let rzTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(rzTimer);
+  rzTimer = setTimeout(() => { if (SEG && KEPT) redraw(); }, 150);
+});
+
+/* ---- sample data ---- */
+const SAMPLES = [{"id": "wy01", "name": "COCORP Wyoming Line 1", "sub": "Wind River Mountains, 1976. 783 traces, 20 s, 8 ms.", "file": "data/COCORP_WY01_coherency.sgy", "mb": 8, "figures": [{"src": "figures/WY01_map.png", "cap": "Location of COCORP Wyoming Lines 1, 1A and 2 across the southeastern Wind River Mountains. Numbers mark shotpoints along each line. Line 1 runs southwest from the range front toward Farson, across the Green River Basin.", "credit": "Figure from Brewer et al. (1980), Tectonophysics 62, 165\\u2013189. \\u00a9 1980 Elsevier Scientific Publishing Company. Reproduced pending permission."}, {"src": "figures/WY01_section.png", "cap": "Unmigrated seismic section showing the Wind River thrust in the lower crust, marked by arrows. A is the point at which the base of the sediments is cut off by the thrust. B is the region in which the thrust splits into possibly three sections in the lower crust. C is the apparent arching of the sediments beneath the thrust. D is the depth at which the thrust splits into two zones.", "credit": "Figure from Brewer et al. (1980), Tectonophysics 62, 165\\u2013189. \\u00a9 1980 Elsevier Scientific Publishing Company. Reproduced pending permission."}], "notes": ["COCORP recorded 158 km of deep reflection profile across the southeastern end of the Wind River Mountains in 1976, to 20 seconds of two-way time. The Wind River thrust was traced as a continuous reflection to about 24 km depth, giving a minimum horizontal displacement of 21 km and a dip of 30 to 35 degrees. The result bore directly on whether Laramide basement uplifts formed by horizontal compression or by vertical movement.", "The interpretation was subsequently disputed. Zawislak and Smithson (1981) argued that velocity inversions in overpressured Cretaceous shales generate multiple reflections strong enough to persist to 10 seconds, and that many deep events on Lines 1 and 2 are multiples rather than primaries.", "This file is the coherency-filtered stack as archived. A filter has therefore already been applied to it, and anything separated out here is a residual after that earlier filtering rather than the first pass over raw stacked data.", "The section is unmigrated. Dipping events are not in their true positions, diffractions have not been collapsed, and the apparent dip read from the tool is not the true dip of the thrust. Some energy rejected at steep dips will be diffraction tails.", "The trace headers carry no geometry: source, group and CDP coordinates are all zero or constant. Only the CDP number, running 1 to 783, is usable. A taper at the right edge, from about CDP 750, is an end-of-line mute."], "refs": ["Brewer, J.A., Smithson, S.B., Oliver, J.E., Kaufman, S., and Brown, L.D., 1980, The Laramide orogeny: Evidence from COCORP deep crustal seismic profiles in the Wind River Mountains, Wyoming: Tectonophysics, v. 62, no. 3\\u20134, p. 165\\u2013189, doi:10.1016/0040-1951(80)90191-2.", "Smithson, S.B., Brewer, J.A., Kaufman, S., Oliver, J.E., and Hurich, C., 1978, Nature of the Wind River thrust, Wyoming, from COCORP deep reflection data and from gravity data: Geology, v. 6, p. 648\\u2013652.", "Smithson, S.B., Brewer, J.A., Kaufman, S., and Oliver, J.E., 1979, Structure of the Laramide Wind River uplift, Wyoming, from COCORP deep reflection data and from gravity data: Journal of Geophysical Research, v. 84, no. B11, p. 5955\\u20135972.", "Zawislak, R.L., and Smithson, S.B., 1981, Problems and improvements in interpreting COCORP data: Geophysics, v. 46, p. 1684\\u20131701.", "Data: Consortium for Continental Reflection Profiling, Wyoming Line 1, coherency-filtered stack. Cornell University ELLIPSE archive, cocorp.eas.cornell.edu/ELLIPSE/."]}, {"id": "synth", "name": "Synthetic 2D line", "sub": "Known model. 480 traces, 1.8 s, 2 ms.", "file": "data/synthetic_2d_line.sgy", "mb": 1.8, "figures": [], "notes": ["Built from a model that is written down, so a parameter change can be checked against what is actually there rather than judged by eye. It contains thirteen dipping horizons with lateral amplitude variation, a normal fault near CDP 1300 whose throw grows with depth, a low-relief channel near CDP 1160, a dim amplitude anomaly near CDP 1370 at 1192 ms, spherical divergence loss, band-limited random noise, and three steep coherent noise trains at roughly 0.55 to 0.70 samples per trace.", "A first pass: reject dips steeper than 0.20 to remove the noise trains, then smooth with edge protection at 2 and watch whether the fault survives in the removed panel."], "refs": ["Generated by make_segy.py in this repository. Not real earth data."]}];
+
+function renderSampleList(){
+  const box = $("samples");
+  box.innerHTML = "<h3>Sample data</h3>" + SAMPLES.map(s =>
+    '<div class="sample" id="s-' + s.id + '"><b>' + s.name + "</b><span>" + s.sub +
+    '</span><button data-sample="' + s.id + '">Load (' + s.mb + ' MB)</button></div>').join("");
+}
+
+function showSampleInfo(s){
+  const box = $("sampleInfo");
+  if (!s){ box.hidden = true; box.innerHTML = ""; return; }
+  let figs = "";
+  if (s.figures.length){
+    figs = '<div class="' + (s.figures.length > 1 ? "figrow" : "") + '">' +
+      s.figures.map((f, i) =>
+        '<figure id="fig-' + s.id + '-' + i + '"><img src="' + f.src +
+        '" alt="" onerror="this.closest(\'figure\').hidden=true"><figcaption>' +
+        f.cap + '<span class="credit">' + f.credit + "</span></figcaption></figure>").join("") +
+      "</div>";
+  }
+  box.innerHTML = "<h2>" + s.name + "</h2>" + figs +
+    s.notes.map(n => "<p>" + n + "</p>").join("") +
+    '<div class="refs"><h3>References</h3>' +
+    s.refs.map(r => "<p>" + r + "</p>").join("") + "</div>";
+  box.hidden = false;
+}
+
+async function loadSample(id){
+  const s = SAMPLES.find(x => x.id === id);
+  if (!s) return;
+  const card = $("s-" + s.id), btn = card.querySelector("button");
+  const label = btn.textContent;
+  card.classList.add("loading");
+  btn.textContent = "Loading\u2026";
+  btn.disabled = true;
+  try {
+    const r = await fetch(s.file);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const ab = await r.arrayBuffer();
+    load(parseSegy(ab), s.name, ab.byteLength);
+    showSampleInfo(s);
+  } catch (err){
+    $("placeholder").hidden = false;
+    $("panels").hidden = true;
+    $("placeholder").textContent =
+      "Could not load " + s.file + ". " + err.message +
+      "  (Opening index.html straight from disk blocks this; serve the folder over http instead.)";
+    showSampleInfo(null);
+  } finally {
+    card.classList.remove("loading");
+    btn.textContent = label;
+    btn.disabled = false;
+  }
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-sample]");
+  if (b) loadSample(b.dataset.sample);
+});
+renderSampleList();
+
+/* ---- reference buttons ---- */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-help]");
+  if (b) openHelp(b.dataset.help);
+});
+
+/* ---- tabs ---- */
+(function(){
+  const btns = Array.from(document.querySelectorAll(".tabs button"));
+  function show(key){
+    for (const b of btns){
+      const on = b.dataset.pane === key;
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      $("pane-" + b.dataset.pane).classList.toggle("on", on);
+    }
+    $("rail").scrollTop = 0;
+    if (SEG && KEPT) redraw();      // panels resize when the rail height changes
+  }
+  for (const b of btns) b.addEventListener("click", () => show(b.dataset.pane));
+  // left/right arrows move between tabs when one has focus
+  for (const b of btns) b.addEventListener("keydown", e => {
+    const i = btns.indexOf(b);
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft"){
+      const n = btns[(i + (e.key === "ArrowRight" ? 1 : btns.length - 1)) % btns.length];
+      n.focus(); show(n.dataset.pane); e.preventDefault();
+    }
+  });
+  window.__showTab = show;
+})();
+
+/* Tabs hide state, so each one carries a count of what is active behind it. */
+function syncBadges(){
+  const p = readParams();
+  const n = (p.fkOn ? 1 : 0) + (p.sosOn ? 1 : 0) + (p.detOn ? 1 : 0);
+  const bf = $("badge-filt");
+  bf.hidden = n === 0; bf.textContent = n;
+  const ba = $("badge-attr");
+  ba.hidden = (p.attr === "none"); ba.textContent = "1";
+  const cropped = SEG && CROP && !(CROP.i0 === 0 && CROP.j0 === 0 &&
+                  CROP.i1 === SEG.fullNx && CROP.j1 === SEG.fullNs);
+  const bd = $("badge-data");
+  bd.hidden = !cropped; bd.textContent = "\u00b7";
+}
+
+syncLabels();
+</script>
+<script data-goatcounter="https://hbedle.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
