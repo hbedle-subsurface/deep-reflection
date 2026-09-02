@@ -254,6 +254,33 @@ signed attribute and a magnitude can read near zero while their magnitudes track
 each other. And Pearson correlation sees linear association only; two attributes
 related through a curve can read low and still carry the same information.
 
+## Clustering
+
+"Cluster with a self-organizing map" in the Attributes tab fits a grid of nodes
+to whichever attributes are displayed, standardised first, and labels every
+sample with its closest node. Node colour follows position on the grid, so
+neighbouring classes take neighbouring colours; the legend shows the grid with
+each node sized by how many samples it took. A 330,000-sample crop with six
+attributes on an 8x8 map trains and classifies in about 2.4 seconds.
+
+**The null test is the point of it.** A clustering method always returns
+clusters, and on data with no spatial structure the result looks as organised
+as on data with plenty. The second button trains the same map twice: once on
+the attributes, once on a version with the phase of each trace randomised
+independently, which keeps every attribute's spectrum and histogram while
+destroying the relationship between one trace and the next. It then reports how
+often adjacent traces share a class in each case.
+
+On a crop of Wyoming Line 1 the answer is 27.7 percent against 2.0 percent for
+the null, a ratio of 14. On synthetic data built with no structure at all the
+same procedure returns 1.08, and on synthetic data with three known facies it
+returns 4.4 while separating those facies into non-overlapping sets of nodes.
+A ratio near 1 means the classes are an artifact of the method.
+
+The comparison is lateral only. The null preserves each trace's own spectrum,
+so vertical smoothness survives it, and counting vertical agreement would
+measure smoothness rather than organisation.
+
 ## Learn more
 
 Every filter group and the attribute picker carry a "Learn more" button, and
