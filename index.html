@@ -235,6 +235,35 @@ button.primary:hover{background:#6d1213;border-color:#6d1213}
   height:340px;color:var(--slate);font-size:.85rem;border:1px solid var(--rule);background:var(--fill);
 }
 
+/* ---------- multi-attribute grid ---------- */
+#multiPanel{margin-bottom:1.2rem}
+#multiList{display:grid;grid-template-columns:1fr 1fr;gap:.05rem .5rem;margin-top:.4rem}
+#multiList label{display:flex;align-items:center;gap:.3rem;font-size:.74rem;
+  color:var(--slate);cursor:pointer}
+#multiList input{margin:0;accent-color:var(--red);width:13px;height:13px}
+#multiGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:.7rem}
+.mcard{border:1px solid var(--rule);background:var(--paper)}
+.mcard .mhead{display:flex;align-items:baseline;gap:.4rem;padding:.25rem .45rem;
+  border-bottom:1px solid var(--rule);background:var(--fill)}
+.mcard .mhead b{font-size:.78rem;font-weight:600}
+.mcard .mhead span{font-size:.7rem;color:var(--slate);flex:1;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.mcard .mhead button{border:0;background:none;color:var(--slate);cursor:pointer;
+  font-size:.9rem;line-height:1;padding:0 .2rem}
+.mcard .mhead button:hover{color:var(--red)}
+.mcard .mbody{display:grid;grid-template-columns:46px 1fr}
+.mcard .mbody canvas{display:block;width:100%;height:100%}
+.mcard .mplot{border-left:1px solid var(--rule);overflow:hidden;position:relative}
+.mcard .mscale{display:flex;justify-content:space-between;font-family:var(--num);
+  font-size:.66rem;color:var(--slate);padding:.15rem .45rem;border-top:1px solid var(--rule)}
+.corrTitle{font-size:.82rem;font-weight:600;margin:1.1rem 0 .5rem}
+#corrBox table{border-collapse:collapse;font-family:var(--num);font-size:.7rem}
+#corrBox th{font-weight:500;color:var(--slate);padding:.15rem .3rem;font-size:.68rem}
+#corrBox th.rowlab{text-align:right}
+#corrBox td{width:44px;height:26px;text-align:center;color:#16191C;
+  border:1px solid #fff}
+#corrBox td.hi{font-weight:600}
+
 /* ---------- fk spectrum ---------- */
 .fkbox{margin-top:.5rem;border:1px solid var(--rule);background:#fff}
 .fkbox canvas{display:block;width:100%;height:auto}
@@ -267,7 +296,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.04</span>
+  <span class="ver" title="build date">v2026.09.05</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -449,6 +478,23 @@ details pre{
         <option value="vik">Vik (CVD-safe diverging)</option>
       </select>
     </div>
+    <details id="multiWrap" style="margin-top:.7rem">
+      <summary>Compare several at once <button class="help" data-help="compare" style="margin-left:.3rem">Learn more</button></summary>
+      <p class="hint" style="margin-top:.4rem">Attributes are computed on the current
+        crop. Selecting many on an uncropped line is slow; crop first.</p>
+      <div id="multiList"></div>
+      <div style="display:flex;gap:.35rem;margin-top:.45rem">
+        <button id="btnMultiSix" style="flex:1">Diverse six</button>
+        <button id="btnMultiNone" style="flex:1">Clear</button>
+      </div>
+      <div class="ctl">
+        <label>Panel height <b><span id="v-mh">150</span> px</b></label>
+        <input type="range" id="multiH" min="90" max="420" step="10" value="150">
+      </div>
+      <button id="btnMultiRun" class="primary" style="width:100%;margin-top:.3rem">
+        Compute selected</button>
+      <p class="hint" id="multiNote"></p>
+    </details>
     <p class="hint" id="attrHint">Attributes are computed on the kept section, so they
       reflect the filters currently applied. With all filters off they are computed on
       the data as read.</p>
@@ -552,6 +598,19 @@ details pre{
       <div class="cap"><h3 id="attrTitle">Attribute</h3><span class="note"
         id="attrNote"></span></div>
       <div class="plot" id="pf3"><div class="yax"><canvas class="axis" id="yf3"></canvas></div><div class="frame" id="f3"><canvas id="cAt"></canvas><div class="readout" id="r3"></div></div><div class="cbar"><canvas class="axis" id="bf3"></canvas></div><div class="xax"><canvas class="axis" id="xf3"></canvas></div></div>
+    </div>
+
+    <div id="multiPanel" hidden>
+      <div class="cap" style="border-left-color:var(--red)">
+        <h3>Attribute comparison</h3>
+        <span class="note" id="multiCap"></span>
+      </div>
+      <div id="multiGrid"></div>
+      <div id="corrWrap" hidden>
+        <h3 class="corrTitle">Correlation between the displayed attributes</h3>
+        <div id="corrBox"></div>
+        <p class="hint" id="corrNote"></p>
+      </div>
     </div>
 
     <div id="sampleInfo" hidden></div>
@@ -1639,8 +1698,8 @@ function drawColorbar(id, vmin, vmax, lut, label){
 }
 
 /* ============================ reference ============================ */
-const HELP = {"start": {"t": "Input, kept, and removed", "c": "concept", "h": "<h3>What the panels show</h3> <p>Each filter separates the data into two parts. The <b>kept</b> panel is the filter output. The <b>removed</b> panel is the arithmetic difference between the input and the kept result, so the two panels sum exactly to the input. A figure below the removed panel gives its share of the input energy.</p> <h3>What appears in the removed panel</h3> <p>Whatever the filter rejected. Random noise appears as speckle with no organisation. Coherent noise appears as organised events, usually at a dip that differs from the reflectors. Signal appears as reflector geometry: layering, terminations, fault planes.</p> <p>The presence of reflector geometry in the removed panel indicates that the filter has rejected part of the signal at the current parameter setting.</p> <h3>Limitations</h3> <p>The removed panel is displayed at its own gain, given on its colour bar, so the visual prominence of the residual is not proportional to its energy. The percentage figure is the quantitative measure.</p>"}, "fk": {"t": "f-k dip and frequency rejection", "c": "filter", "h": "<h3>What it does</h3> <p>A two-dimensional Fourier transform maps the section into wavenumber and frequency. An event with a constant slope on the section maps to a line through the origin of that plane, so events with different dips occupy different regions of it. The filter sets a wedge of that plane to zero and transforms back, removing events steeper than a chosen dip.</p> <p>Dip is expressed in samples per trace, which is independent of sample interval and trace spacing. An event descending one sample every ten traces has a dip of 0.1.</p> <h3>Controls</h3> <p><b>Dip limit</b> sets the boundary of the rejected wedge; events steeper than this are removed. <b>Transition width</b> sets the cosine taper across that boundary, which reduces ringing at the cost of a less sharp separation. <b>Pass band</b> applies a frequency filter on the same transform. The spectrum display shades the rejected region.</p> <h3>In the earth</h3> <p>Reflected energy from subhorizontal interfaces occupies low dips. Steeper dips are occupied by migration artifacts, ground-roll remnants, some multiples, and linear noise trains. On many 2D lines reflectors lie below 0.1 samples per trace, so the separation on dip is clean. Steeply dipping geology, such as crustal thrusts, can reach 0.6 or more and overlaps the range where coherent noise also lies.</p> <h3>Limitations</h3> <p>The filter operates on dip alone and cannot distinguish steep signal from steep noise.</p> <p>The operation is not local. A wedge rejection has an impulse response spanning the whole section, so filtering a crop and cropping a filtered line give different results throughout the crop, not only near its edges.</p>"}, "sos": {"t": "Structure-oriented smoothing", "c": "filter", "h": "<h3>What it does</h3> <p>The local orientation of the image is estimated at every sample from the gradient structure tensor, and the data are averaged along that orientation rather than across it. Energy with a consistent local dip is preserved by the averaging; energy without one is reduced.</p> <p>The same tensor yields a linearity between 0 and 1. The edge-protection control raises linearity to a power and uses it to scale the amount of smoothing applied, so smoothing is reduced where the image has no single dominant orientation.</p> <h3>Controls</h3> <p><b>Smoothing length</b> is the distance along the reflector over which the average is taken. <b>Dip estimation window</b> is the size of the region contributing to the orientation estimate. <b>Edge protection</b> is the exponent applied to linearity; at 0 the smoothing is applied uniformly. <b>Strength</b> scales the whole operation.</p> <h3>In the earth</h3> <p>Reflectors are laterally continuous over distances large compared with the smoothing length, so they survive. Faults, terminations, pinchouts and channel edges are locations where the image has no single orientation, and the linearity gate reduces smoothing there.</p> <h3>Limitations</h3> <p>With edge protection at 0, a discontinuity narrower than the smoothing length is averaged across, producing a continuous reflector where the input contained a break.</p> <p>In a region containing only noise the structure tensor still returns an orientation, and averaging along it produces laterally continuous features that were not present in the input.</p>"}, "detail": {"t": "Detail boost", "c": "filter", "h": "<h3>What it does</h3> <p>A Gaussian-smoothed version of the section is subtracted to give a base and a detail component. The detail is multiplied by a gain and added back to the base.</p> <h3>Controls</h3> <p><b>Base scale</b> is the width of the smoothing that defines the split. Features larger than this go to the base, smaller ones to the detail. <b>Detail gain</b> above 1 amplifies the detail component; below 1 attenuates it.</p> <h3>In the earth</h3> <p>Thin beds, closely spaced reflectors and short terminations are small-scale and fall in the detail component. Regional amplitude variation and broad brightening are large-scale and fall in the base.</p> <h3>Limitations</h3> <p>An amplitude anomaly wider than the base scale is a large-scale feature and is placed in the base, so raising the detail gain does not affect it.</p> <p>The gain is applied to whatever occupies the detail component, including noise and any artifacts introduced by a preceding filter.</p>"}, "envelope": {"t": "Envelope", "c": "attribute", "h": "<h3>What it measures</h3> <p>The magnitude of the analytic trace, formed from the trace and its Hilbert transform. It is the instantaneous amplitude of the seismic signal, independent of phase, so a peak and the adjacent trough of one reflection produce a single envelope maximum rather than two events separated by a null.</p> <h3>High and low values</h3> <p><b>High:</b> large instantaneous amplitude. <b>Low:</b> small instantaneous amplitude. The envelope is bounded below by the absolute value of the trace and is never negative.</p> <h3>In the earth</h3> <p>Amplitude responds to the magnitude of the impedance contrast at an interface, so high envelope commonly corresponds to a large lithology or fluid change. It also rises where reflections from closely spaced interfaces interfere constructively, which occurs at bed thicknesses near a quarter of the dominant wavelength. Gas-charged intervals frequently produce high envelope through the associated impedance reduction.</p> <h3>Limitations</h3> <p>The envelope carries the gain applied to the data, so values at different times or in different surveys are not comparable unless the gain history is known. After AGC the relative amplitude relationships that make the attribute interpretable have been removed.</p> <p>Tuning and a genuine amplitude anomaly both raise the envelope, and the attribute alone does not separate them.</p>"}, "insphase": {"t": "Instantaneous phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The argument of the analytic trace, in radians. It records the position within the wavelet cycle at each sample and contains no amplitude information: a weak reflection and a strong one at the same point in their cycles have the same phase.</p> <h3>High and low values</h3> <p>The quantity is cyclic, so high and low have no interpretive meaning. Zero corresponds to a peak, ±π to a trough, and ±π/2 to a zero crossing. The information is in the lateral continuity of the phase bands rather than in their values.</p> <h3>In the earth</h3> <p>Because amplitude is normalised out, reflections of any strength are displayed equally, so phase bands follow bedding continuously across intervals where amplitude varies. Lateral breaks in a phase band occur at faults, unconformities and stratigraphic terminations.</p> <h3>Limitations</h3> <p>The value jumps from +π to −π once per cycle. These discontinuities appear as lateral bands in the display and originate in the representation, not in the data. Cosine of phase and unwrapped phase are formulations without them.</p> <p>Where the envelope approaches zero the phase is determined by whatever is present, including noise, and varies rapidly.</p>"}, "cosphase": {"t": "Cosine of instantaneous phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The cosine of the instantaneous phase. It carries the same information as the phase but as a continuous quantity between −1 and +1, with no wrap discontinuity. It is the seismic trace with its amplitude normalised to unity everywhere.</p> <h3>High and low values</h3> <p><b>+1:</b> a peak. <b>−1:</b> a trough. <b>0:</b> a zero crossing. All reflections are displayed at the same strength regardless of their amplitude.</p> <h3>In the earth</h3> <p>The display follows bedding continuity into intervals where reflections are too weak to see on an amplitude section, which makes it used for tracing horizons through low-amplitude zones and for identifying terminations and onlap geometry.</p> <h3>Limitations</h3> <p>Amplitude normalisation applies equally to noise. In an interval with low signal-to-noise ratio, the attribute displays noise at the same strength as signal and produces banding with no reflection origin. The envelope indicates where the signal is strong enough for the display to be meaningful.</p>"}, "insfreq": {"t": "Instantaneous frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>The time derivative of the instantaneous phase, divided by 2π, in Hz. It estimates the dominant frequency of the signal at each individual sample rather than averaged over a window.</p> <h3>High and low values</h3> <p><b>High:</b> the local waveform is oscillating rapidly. <b>Low:</b> it is oscillating slowly. The estimate can take negative values, which have no physical interpretation as a frequency.</p> <h3>In the earth</h3> <p>Frequency content relates to bed thickness, since thinner beds produce interference patterns with higher dominant frequency, and to attenuation, which removes high frequencies preferentially with depth and with path length through absorptive material. Localised low-frequency zones beneath high-amplitude reflections have been associated with gas, though scattering, thin-bed interference and tuning also produce them.</p> <h3>Limitations</h3> <p>The estimate is a ratio whose denominator is the squared envelope. Where the envelope approaches zero the ratio is unstable, and the attribute takes very large positive and negative values. On a typical section around a third of samples fall outside the range 0 to Nyquist, with excursions of several orders of magnitude. This behaviour is a property of the definition rather than an artifact of a particular implementation.</p> <p>Wavelet frequency and average frequency are stabilised measurements of the same quantity.</p>"}, "unwrap": {"t": "Unwrapped phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous phase accumulated continuously along the trace rather than folded into the interval ±π. The phase derivative is integrated directly, so the result never wraps. Its slope at any point equals 2π times the instantaneous frequency.</p> <h3>High and low values</h3> <p>The absolute value depends on an arbitrary integration constant and is not interpretable. The interpretable quantity is the local gradient: a steeper gradient corresponds to a higher instantaneous frequency.</p> <h3>In the earth</h3> <p>Departures of the gradient from its regional trend indicate intervals where the frequency content differs from its surroundings, arising from the same causes as for instantaneous frequency: bed thickness, attenuation and interference.</p> <h3>Limitations</h3> <p>The attribute is an integral, so an error in the phase derivative at one time propagates to every later sample. Absolute levels deep in a record accumulate the errors above them.</p>"}, "sweetness": {"t": "Sweetness", "c": "attribute", "h": "<h3>What it measures</h3> <p>The envelope divided by the square root of the instantaneous frequency. It is a composite of two other attributes and increases with amplitude and decreases with frequency.</p> <h3>High and low values</h3> <p><b>High:</b> high amplitude, low frequency, or both. <b>Low:</b> low amplitude, high frequency, or both.</p> <h3>In the earth</h3> <p>Radovich and Oliveros (1998) observed in the Gulf of Mexico that sandy facies embedded in a shale matrix frequently show both higher envelope and lower instantaneous frequency than the surrounding shale, and combined the two into this single quantity for that reason. The association is empirical and was established in a particular geological setting.</p> <h3>Limitations</h3> <p>Because the two contributions multiply, a high value can arise from either alone. A tuned reflector of ordinary frequency and a weak low-frequency interval can produce the same value. The envelope and frequency examined separately distinguish these cases.</p> <p>The attribute inherits the gain dependence of the envelope.</p>"}, "wavfreq": {"t": "Wavelet frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>Also called response frequency. The envelope maxima are located, and the instantaneous frequency at each maximum is assigned to every sample between the adjacent envelope minima. The result is one frequency value per reflection event, constant across that event.</p> <p>The reasoning, from Bodine (1984), is that most of the energy in a trace lies near the envelope peaks, which is where the frequency estimate is best conditioned.</p> <h3>High and low values</h3> <p><b>High:</b> a rapidly oscillating reflection event. <b>Low:</b> a slowly oscillating one. The range is bounded in practice because the estimate is taken only where the envelope is large.</p> <h3>In the earth</h3> <p>The same relationships as for instantaneous frequency: bed thickness and attenuation. The measurement is expressed per event rather than per sample.</p> <h3>Limitations</h3> <p>The display is piecewise constant by construction and cannot resolve variation within a single reflection event.</p>"}, "wavphase": {"t": "Wavelet phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous phase at each envelope maximum, assigned to every sample between the adjacent envelope minima. It describes the phase character of each reflection event with one value.</p> <h3>High and low values</h3> <p><b>Near 0:</b> the event is centred on a peak, consistent with a zero-phase wavelet and a positive reflection coefficient. <b>Near ±π:</b> centred on a trough, consistent with a negative reflection coefficient. <b>Near ±π/2:</b> the event is not centred on either, which occurs for non-zero-phase wavelets and for thin-bed responses.</p> <h3>In the earth</h3> <p>A lateral change from near 0 to near ±π along one reflector is consistent with a polarity reversal, which occurs where the sign of the impedance contrast changes, as at a fluid contact or a lateral facies change.</p> <h3>Limitations</h3> <p>Wavelet phase also varies with the phase of the source wavelet left by processing, which can vary spatially. A phase change measured on one reflector does not by itself establish a change in reflection coefficient.</p>"}, "avgfreq": {"t": "Average frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous frequency averaged over a window and weighted by instantaneous power, so samples with strong signal contribute in proportion to their energy and samples with none contribute little. Following Barnes (2016).</p> <h3>High and low values</h3> <p><b>High:</b> the energy in the window is concentrated at higher frequencies. <b>Low:</b> at lower frequencies. The weighting keeps the estimate within the data bandwidth in normal circumstances.</p> <h3>In the earth</h3> <p>Average frequency declines with depth in most sections as the earth attenuates high frequencies along the travel path. Departures from that regional trend indicate local change: thinner bedding raises it, and absorptive or scattering intervals lower it.</p> <h3>Limitations</h3> <p>The window length determines what is measured. A short window follows individual reflection events; a long one characterises intervals. Values from different window lengths are not comparable.</p>"}, "avgband": {"t": "Average bandwidth", "c": "attribute", "h": "<h3>What it measures</h3> <p>The spread of the power-weighted instantaneous frequency distribution within the window, expressed as twice its standard deviation. Where average frequency gives the centre of that distribution, bandwidth gives its width.</p> <h3>High and low values</h3> <p><b>High:</b> the instantaneous frequency varies substantially within the window. <b>Low:</b> it is close to constant.</p> <h3>In the earth</h3> <p>Variation in instantaneous frequency within a window arises from interference between reflections at different spacings, so high bandwidth commonly corresponds to thinly interbedded or heterogeneous intervals. Low bandwidth corresponds to isolated reflections and to monotonous sections.</p> <h3>Limitations</h3> <p>The convention used here is the full bandwidth, twice the standard deviation. Barnes (2016) defines the bandwidth as the standard deviation itself, so values differ by a factor of two between the two conventions.</p> <p>The measurement describes the variation of the instantaneous frequency, which is not the same quantity as the width of the amplitude spectrum. A signal composed of two symmetric tones has a constant instantaneous frequency and therefore near-zero bandwidth by this measure, while its amplitude spectrum is wide.</p>"}, "rms": {"t": "RMS amplitude", "c": "attribute", "h": "<h3>What it measures</h3> <p>The root mean square of the trace within a running window. It is the square root of the mean power in the window.</p> <h3>High and low values</h3> <p><b>High:</b> large mean power in the window. <b>Low:</b> small mean power. The quantity is never negative.</p> <h3>In the earth</h3> <p>Intervals containing many strong reflections read high, and intervals with few or weak reflections read low. On deep reflection data this is the measurement underlying descriptions of crust as reflective or transparent.</p> <h3>Limitations</h3> <p>The window length changes the result. A window comparable to the wavelet length approaches the envelope and follows individual reflections; a longer window characterises intervals.</p> <p>The measurement includes noise, so an interval can read high because its signal-to-noise ratio is low rather than because it contains reflections. Measures based on spatial coherence separate the two.</p> <p>Like all amplitude measurements, it carries the applied gain.</p>"}, "tke": {"t": "Teager-Kaiser energy", "c": "attribute", "h": "<h3>What it measures</h3> <p>The square of the first time derivative of the trace, minus the product of the trace and its second derivative. For a signal of amplitude A and angular frequency ω the operator returns A²ω² exactly.</p> <p>Kaiser (1990) derived it from the energy of a mass on a spring. The seismic energy density given by Sheriff and Geldart (1995) has the same dependence on amplitude and frequency, which is the basis for using the operator as an estimator of it. The attribute therefore responds to amplitude and frequency jointly, unlike RMS amplitude, which responds to amplitude alone.</p> <p>Applied to the analytic trace, the real and imaginary parts each contribute A²ω², so the complex-trace result is twice the real-trace value (Hamila et al., 1999).</p> <h3>High and low values</h3> <p><b>High:</b> large amplitude, high frequency, or both. <b>Low:</b> small amplitude, low frequency, or both. The output is non-negative. Two reflections of equal amplitude but different frequency give different values.</p> <h3>In the earth</h3> <p>The attribute is high where strong reflections coincide with well-resolved, higher-frequency character, and low in weak or attenuated intervals. Because it is a squared quantity its own frequency content is lower than that of the input, so it mixes vertically over a longer interval than the reflection data.</p> <h3>Limitations</h3> <p>The output is non-negative and therefore has a non-zero mean, which prevents its use as input to coherence and similar attributes. The Teager-Kaiser variation is the zero-mean formulation.</p> <p>The derivatives are computed with smooth noise-robust filters, which are low-pass by construction and under-estimate the derivative as frequency rises. On 2 ms data the 7-point filter returns 0.988 of the true derivative at 10 Hz and 0.806 at 45 Hz, so the energy, being quadratic in the derivative, reads about 35 percent low at 45 Hz. Values are therefore not directly comparable across widely separated frequencies. A shorter filter reduces the effect and is less resistant to noise.</p>"}, "tkv": {"t": "Teager-Kaiser variation", "c": "attribute", "h": "<h3>What it measures</h3> <p>The Teager-Kaiser energy, bandpass filtered and then Hilbert transformed. The filtering removes the non-zero mean and the Hilbert transform converts the result into an oscillatory quantity. Following Matos (2018).</p> <h3>High and low values</h3> <p>The quantity oscillates about zero. Zero crossings occur where the underlying energy changes most rapidly with time, so the transitions rather than the extrema mark the boundaries between intervals of differing energy.</p> <h3>In the earth</h3> <p>Boundaries between packages of differing reflection energy: the tops and bases of reflective intervals, unconformities, and lateral changes in reflection character.</p> <h3>Limitations</h3> <p>Its frequency content is lower than that of the input, so it resolves less detail.</p> <p>Polarity information is lost at the energy step, so the sign of the output derives from the transform rather than from the reflection coefficient.</p>"}, "avt": {"t": "Amplitude volume transform", "c": "attribute", "h": "<h3>What it measures</h3> <p>Three operations, from Bulhões (1999). The envelope is computed, its RMS is taken in a short window, and an inverse Hilbert transform is applied to that RMS envelope. The last step converts a smooth non-negative quantity into an oscillatory zero-mean one that responds to vertical change in the energy.</p> <h3>High and low values</h3> <p>The quantity oscillates about zero. Zero crossings mark where the RMS envelope changes most rapidly with time, so the display outlines the boundaries of energy packages rather than their interiors.</p> <h3>In the earth</h3> <p>The attribute was developed for mapping structural and stratigraphic features and is applied to faults, channels, carbonate bodies, unconformities and reflector terminations, all of which involve abrupt vertical or lateral change in reflection energy.</p> <h3>Limitations</h3> <p>The output has lower frequency content than the input. The window length controls this: shorter windows retain more detail and more noise.</p> <p>Polarity is discarded at the envelope step, so the sign of the output is a property of the transform rather than of the reflection coefficient.</p>"}, "rai": {"t": "Relative acoustic impedance", "c": "attribute", "h": "<h3>What it measures</h3> <p>The trace integrated with respect to time in the frequency domain, then bandpass filtered. Seismic amplitude approximates the reflection coefficient, which is a function of the change in acoustic impedance across an interface; integration recovers a quantity proportional to the impedance of the layer itself, within the seismic bandwidth.</p> <p>Integration divides the spectrum by iω, which rotates the phase by −90 degrees, amplifies low frequencies and attenuates high ones. The bandpass filter limits the amplification of frequencies below those present in the data.</p> <h3>High and low values</h3> <p><b>High:</b> higher acoustic impedance relative to the surrounding section. <b>Low:</b> lower. The phase rotation places layer boundaries at zero crossings and layer interiors at extrema, so the display represents layers rather than contacts.</p> <h3>In the earth</h3> <p>Acoustic impedance is the product of velocity and density, so high values commonly correspond to carbonates, tight or cemented sands and other consolidated lithologies, and low values to shales, porous sands and gas-charged intervals.</p> <h3>Limitations</h3> <p>The integration constant is not recoverable and the low frequencies are absent from seismic data, so the result is relative within the passband and has no absolute datum. Two intervals of genuinely different impedance can display the same level.</p> <p>The derivation assumes a zero-phase wavelet approximating a spike and small reflection coefficients. Departures from these assumptions, particularly residual wavelet phase, are carried into the result.</p>"}, "dip": {"t": "Apparent dip", "c": "attribute", "h": "<h3>What it measures</h3> <p>The local slope of the reflectors in samples per trace, taken from the eigenvector of the gradient structure tensor associated with the smaller eigenvalue. This is the same estimate that steers the structure-oriented smoothing.</p> <h3>High and low values</h3> <p>The sign gives the direction of dip within the plane of the section and the magnitude its steepness. Zero is a horizontal event.</p> <h3>In the earth</h3> <p>Smoothly varying dip maps folds and regional structural gradient. Abrupt lateral changes in dip occur at faults, and angular relationships between dip domains occur at unconformities.</p> <h3>Limitations</h3> <p>On a 2D line the quantity is apparent dip in the direction of the line. A reflector dipping partly out of the plane of the section reads shallower than its true dip, and the true dip cannot be recovered without a second azimuth.</p> <p>Where no coherent event is present the tensor still returns an orientation. The linearity attribute indicates where the dip estimate is supported by the data.</p>"}, "linearity": {"t": "Linearity", "c": "attribute", "h": "<h3>What it measures</h3> <p>The difference of the two structure-tensor eigenvalues divided by their sum, giving a value between 0 and 1. It quantifies how strongly the local image is dominated by a single orientation.</p> <h3>High and low values</h3> <p><b>Near 1:</b> the image has one clear orientation, as for a well-defined reflector. <b>Near 0:</b> no preferred orientation, as for random noise, chaotic reflection character, or the intersection of events with different dips.</p> <h3>In the earth</h3> <p>High linearity corresponds to continuous layered reflections. Low linearity corresponds to disrupted zones, chaotic facies such as mass transport deposits, and intervals where the signal-to-noise ratio is low.</p> <h3>Limitations</h3> <p>Low linearity does not distinguish geological disruption from noise, since neither has a dominant orientation.</p>"}, "coherence": {"t": "In-line coherence", "c": "attribute", "h": "<h3>What it measures</h3> <p>Semblance computed along the local dip across a small group of adjacent traces. It is the ratio of the energy of the summed traces to the summed energy of the individual traces, and quantifies waveform similarity between neighbouring traces once their dip has been accounted for.</p> <h3>High and low values</h3> <p><b>Near 1:</b> adjacent traces are similar, corresponding to a laterally continuous reflection. <b>Low:</b> adjacent traces differ. Unlike most attributes, the low values carry the structural information.</p> <h3>In the earth</h3> <p>Lateral waveform change occurs at faults, channel margins, reef edges, and stratigraphic terminations, all of which produce low coherence.</p> <h3>Limitations</h3> <p>On a 2D line the measurement is made only along the line. A fault striking parallel to the section produces no waveform difference between adjacent traces on the same side of it and is not detected. This is the principal reason coherence is normally computed on 3D volumes.</p> <p>Low signal-to-noise ratio reduces trace similarity and lowers coherence independently of structure.</p>"}, "band": {"t": "Spectral band", "c": "attribute", "h": "<h3>What it measures</h3> <p>The envelope of a single narrow frequency band, isolated with a constant-Q Gaussian filter so that the time resolution scales with the centre frequency. Stepping the centre frequency through the data bandwidth shows how energy is distributed across frequency.</p> <h3>High and low values</h3> <p><b>High:</b> substantial energy at that frequency at that location. <b>Low:</b> little. Values from different bands are comparable only within the range where the data carries energy.</p> <h3>In the earth</h3> <p>A bed reaches maximum reflection amplitude at the frequency whose quarter wavelength matches its thickness, so thin beds are most prominent in higher bands and thicker beds in lower ones. Comparison across bands is therefore sensitive to layer thickness. Intervals bright at low frequency and weak at high frequency indicate preferential loss of high frequencies, which arises from absorption, from scattering in heterogeneous media, and from thin-bed interference.</p> <h3>Limitations</h3> <p>Bands outside the range where the data has energy contain mostly noise. The spectrum shown in the f-k display gives the range within which band comparison is meaningful.</p>"}, "rgb": {"t": "Three-band RGB blend", "c": "attribute", "h": "<h3>What it measures</h3><p>Three narrow frequency bands are extracted with constant-Q Gaussian filters, their envelopes taken, and each mapped to one channel of a colour image: the low band to red, the middle to green, the high to blue. Each channel is scaled to its own 99th percentile, so the three are displayed at comparable strength.</p><h3>High and low values</h3><p>Colour encodes which part of the spectrum carries the energy rather than how much there is. <b>Warm colours</b> indicate the low band dominates locally, <b>blue</b> that the high band does, and <b>grey or white</b> that all three are comparable. Dark areas have little energy in any band.</p><h3>In the earth</h3><p>Because a bed reaches maximum amplitude at the frequency whose quarter wavelength matches its thickness, a lateral change in colour along one interval corresponds to a change in the thickness or spacing of the layering producing it. A downward shift from blue toward red follows the preferential loss of high frequencies with depth, from absorption and from scattering. On legacy deep data the usable bandwidth is narrow, so the three bands are placed around the chosen centre frequency rather than spread across the whole spectrum.</p><h3>Limitations</h3><p>The independent scaling of the three channels means colour is relative within each band and not comparable between surveys or between parameter settings. Bands outside the range where the data carries energy contribute noise to their channel, which appears as a uniform colour cast.</p><p>The display has no single numeric value, so no colour bar is drawn and the hover readout does not apply.</p>"}, "display": {"t": "Amplitude, scale and vertical exaggeration", "c": "concept", "h": "<h3>Amplitude</h3><p>Three panels share one gain field, computed from the input and applied to all of them, so the removed panel is displayed at the same scale as what it came from.</p><p><b>As recorded</b> applies nothing. <b>Time gain</b> multiplies by t raised to a power, one smooth curve applied to every trace alike, which counters spherical divergence and attenuation while leaving lateral amplitude relations intact. <b>AGC</b> normalises by the local RMS in a window, which opens up the deep record further but scales every sample by a different factor.</p><p>The distinction matters for the amplitude-based attributes. Under a t-power gain the envelope, sweetness and relative acoustic impedance remain comparable from trace to trace, because the gain depends only on time. Under AGC they do not.</p><h3>Vertical exaggeration</h3><p>The ratio between the vertical and horizontal scales of the display. At 1x the section is drawn true to scale and a dip measured off it is the dip in the ground. Reflection sections are conventionally shown near 3x, which makes bedding easier to follow at the cost of steepening every dip.</p><p>The exaggeration is computed from the trace spacing and a velocity. Legacy trace headers rarely record the spacing, so it is entered by hand; COCORP CDP spacing is typically 50 to 100 m. The depth column on the time axis uses one velocity for the whole section and is a scale rather than a conversion.</p><h3>Limitations</h3><p>A dip read from an exaggerated display is not the dip of the reflector. At 3x, a bed dipping 33 degrees is drawn at 63. On an unmigrated section the reflector is also not in its true position, so both corrections apply.</p>"}};
-const HELP_ORDER = ["start", "display", "fk", "sos", "detail", "envelope", "insphase", "cosphase", "insfreq", "unwrap", "sweetness", "wavfreq", "wavphase", "avgfreq", "avgband", "rms", "tke", "tkv", "avt", "rai", "dip", "linearity", "coherence", "band", "rgb"];
+const HELP = {"start": {"t": "Input, kept, and removed", "c": "concept", "h": "<h3>What the panels show</h3> <p>Each filter separates the data into two parts. The <b>kept</b> panel is the filter output. The <b>removed</b> panel is the arithmetic difference between the input and the kept result, so the two panels sum exactly to the input. A figure below the removed panel gives its share of the input energy.</p> <h3>What appears in the removed panel</h3> <p>Whatever the filter rejected. Random noise appears as speckle with no organisation. Coherent noise appears as organised events, usually at a dip that differs from the reflectors. Signal appears as reflector geometry: layering, terminations, fault planes.</p> <p>The presence of reflector geometry in the removed panel indicates that the filter has rejected part of the signal at the current parameter setting.</p> <h3>Limitations</h3> <p>The removed panel is displayed at its own gain, given on its colour bar, so the visual prominence of the residual is not proportional to its energy. The percentage figure is the quantitative measure.</p>"}, "fk": {"t": "f-k dip and frequency rejection", "c": "filter", "h": "<h3>What it does</h3> <p>A two-dimensional Fourier transform maps the section into wavenumber and frequency. An event with a constant slope on the section maps to a line through the origin of that plane, so events with different dips occupy different regions of it. The filter sets a wedge of that plane to zero and transforms back, removing events steeper than a chosen dip.</p> <p>Dip is expressed in samples per trace, which is independent of sample interval and trace spacing. An event descending one sample every ten traces has a dip of 0.1.</p> <h3>Controls</h3> <p><b>Dip limit</b> sets the boundary of the rejected wedge; events steeper than this are removed. <b>Transition width</b> sets the cosine taper across that boundary, which reduces ringing at the cost of a less sharp separation. <b>Pass band</b> applies a frequency filter on the same transform. The spectrum display shades the rejected region.</p> <h3>In the earth</h3> <p>Reflected energy from subhorizontal interfaces occupies low dips. Steeper dips are occupied by migration artifacts, ground-roll remnants, some multiples, and linear noise trains. On many 2D lines reflectors lie below 0.1 samples per trace, so the separation on dip is clean. Steeply dipping geology, such as crustal thrusts, can reach 0.6 or more and overlaps the range where coherent noise also lies.</p> <h3>Limitations</h3> <p>The filter operates on dip alone and cannot distinguish steep signal from steep noise.</p> <p>The operation is not local. A wedge rejection has an impulse response spanning the whole section, so filtering a crop and cropping a filtered line give different results throughout the crop, not only near its edges.</p>"}, "sos": {"t": "Structure-oriented smoothing", "c": "filter", "h": "<h3>What it does</h3> <p>The local orientation of the image is estimated at every sample from the gradient structure tensor, and the data are averaged along that orientation rather than across it. Energy with a consistent local dip is preserved by the averaging; energy without one is reduced.</p> <p>The same tensor yields a linearity between 0 and 1. The edge-protection control raises linearity to a power and uses it to scale the amount of smoothing applied, so smoothing is reduced where the image has no single dominant orientation.</p> <h3>Controls</h3> <p><b>Smoothing length</b> is the distance along the reflector over which the average is taken. <b>Dip estimation window</b> is the size of the region contributing to the orientation estimate. <b>Edge protection</b> is the exponent applied to linearity; at 0 the smoothing is applied uniformly. <b>Strength</b> scales the whole operation.</p> <h3>In the earth</h3> <p>Reflectors are laterally continuous over distances large compared with the smoothing length, so they survive. Faults, terminations, pinchouts and channel edges are locations where the image has no single orientation, and the linearity gate reduces smoothing there.</p> <h3>Limitations</h3> <p>With edge protection at 0, a discontinuity narrower than the smoothing length is averaged across, producing a continuous reflector where the input contained a break.</p> <p>In a region containing only noise the structure tensor still returns an orientation, and averaging along it produces laterally continuous features that were not present in the input.</p>"}, "detail": {"t": "Detail boost", "c": "filter", "h": "<h3>What it does</h3> <p>A Gaussian-smoothed version of the section is subtracted to give a base and a detail component. The detail is multiplied by a gain and added back to the base.</p> <h3>Controls</h3> <p><b>Base scale</b> is the width of the smoothing that defines the split. Features larger than this go to the base, smaller ones to the detail. <b>Detail gain</b> above 1 amplifies the detail component; below 1 attenuates it.</p> <h3>In the earth</h3> <p>Thin beds, closely spaced reflectors and short terminations are small-scale and fall in the detail component. Regional amplitude variation and broad brightening are large-scale and fall in the base.</p> <h3>Limitations</h3> <p>An amplitude anomaly wider than the base scale is a large-scale feature and is placed in the base, so raising the detail gain does not affect it.</p> <p>The gain is applied to whatever occupies the detail component, including noise and any artifacts introduced by a preceding filter.</p>"}, "envelope": {"t": "Envelope", "c": "attribute", "h": "<h3>What it measures</h3> <p>The magnitude of the analytic trace, formed from the trace and its Hilbert transform. It is the instantaneous amplitude of the seismic signal, independent of phase, so a peak and the adjacent trough of one reflection produce a single envelope maximum rather than two events separated by a null.</p> <h3>High and low values</h3> <p><b>High:</b> large instantaneous amplitude. <b>Low:</b> small instantaneous amplitude. The envelope is bounded below by the absolute value of the trace and is never negative.</p> <h3>In the earth</h3> <p>Amplitude responds to the magnitude of the impedance contrast at an interface, so high envelope commonly corresponds to a large lithology or fluid change. It also rises where reflections from closely spaced interfaces interfere constructively, which occurs at bed thicknesses near a quarter of the dominant wavelength. Gas-charged intervals frequently produce high envelope through the associated impedance reduction.</p> <h3>Limitations</h3> <p>The envelope carries the gain applied to the data, so values at different times or in different surveys are not comparable unless the gain history is known. After AGC the relative amplitude relationships that make the attribute interpretable have been removed.</p> <p>Tuning and a genuine amplitude anomaly both raise the envelope, and the attribute alone does not separate them.</p>"}, "insphase": {"t": "Instantaneous phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The argument of the analytic trace, in radians. It records the position within the wavelet cycle at each sample and contains no amplitude information: a weak reflection and a strong one at the same point in their cycles have the same phase.</p> <h3>High and low values</h3> <p>The quantity is cyclic, so high and low have no interpretive meaning. Zero corresponds to a peak, ±π to a trough, and ±π/2 to a zero crossing. The information is in the lateral continuity of the phase bands rather than in their values.</p> <h3>In the earth</h3> <p>Because amplitude is normalised out, reflections of any strength are displayed equally, so phase bands follow bedding continuously across intervals where amplitude varies. Lateral breaks in a phase band occur at faults, unconformities and stratigraphic terminations.</p> <h3>Limitations</h3> <p>The value jumps from +π to −π once per cycle. These discontinuities appear as lateral bands in the display and originate in the representation, not in the data. Cosine of phase and unwrapped phase are formulations without them.</p> <p>Where the envelope approaches zero the phase is determined by whatever is present, including noise, and varies rapidly.</p>"}, "cosphase": {"t": "Cosine of instantaneous phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The cosine of the instantaneous phase. It carries the same information as the phase but as a continuous quantity between −1 and +1, with no wrap discontinuity. It is the seismic trace with its amplitude normalised to unity everywhere.</p> <h3>High and low values</h3> <p><b>+1:</b> a peak. <b>−1:</b> a trough. <b>0:</b> a zero crossing. All reflections are displayed at the same strength regardless of their amplitude.</p> <h3>In the earth</h3> <p>The display follows bedding continuity into intervals where reflections are too weak to see on an amplitude section, which makes it used for tracing horizons through low-amplitude zones and for identifying terminations and onlap geometry.</p> <h3>Limitations</h3> <p>Amplitude normalisation applies equally to noise. In an interval with low signal-to-noise ratio, the attribute displays noise at the same strength as signal and produces banding with no reflection origin. The envelope indicates where the signal is strong enough for the display to be meaningful.</p>"}, "insfreq": {"t": "Instantaneous frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>The time derivative of the instantaneous phase, divided by 2π, in Hz. It estimates the dominant frequency of the signal at each individual sample rather than averaged over a window.</p> <h3>High and low values</h3> <p><b>High:</b> the local waveform is oscillating rapidly. <b>Low:</b> it is oscillating slowly. The estimate can take negative values, which have no physical interpretation as a frequency.</p> <h3>In the earth</h3> <p>Frequency content relates to bed thickness, since thinner beds produce interference patterns with higher dominant frequency, and to attenuation, which removes high frequencies preferentially with depth and with path length through absorptive material. Localised low-frequency zones beneath high-amplitude reflections have been associated with gas, though scattering, thin-bed interference and tuning also produce them.</p> <h3>Limitations</h3> <p>The estimate is a ratio whose denominator is the squared envelope. Where the envelope approaches zero the ratio is unstable, and the attribute takes very large positive and negative values. On a typical section around a third of samples fall outside the range 0 to Nyquist, with excursions of several orders of magnitude. This behaviour is a property of the definition rather than an artifact of a particular implementation.</p> <p>Wavelet frequency and average frequency are stabilised measurements of the same quantity.</p>"}, "unwrap": {"t": "Unwrapped phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous phase accumulated continuously along the trace rather than folded into the interval ±π. The phase derivative is integrated directly, so the result never wraps. Its slope at any point equals 2π times the instantaneous frequency.</p> <h3>High and low values</h3> <p>The absolute value depends on an arbitrary integration constant and is not interpretable. The interpretable quantity is the local gradient: a steeper gradient corresponds to a higher instantaneous frequency.</p> <h3>In the earth</h3> <p>Departures of the gradient from its regional trend indicate intervals where the frequency content differs from its surroundings, arising from the same causes as for instantaneous frequency: bed thickness, attenuation and interference.</p> <h3>Limitations</h3> <p>The attribute is an integral, so an error in the phase derivative at one time propagates to every later sample. Absolute levels deep in a record accumulate the errors above them.</p>"}, "sweetness": {"t": "Sweetness", "c": "attribute", "h": "<h3>What it measures</h3> <p>The envelope divided by the square root of the instantaneous frequency. It is a composite of two other attributes and increases with amplitude and decreases with frequency.</p> <h3>High and low values</h3> <p><b>High:</b> high amplitude, low frequency, or both. <b>Low:</b> low amplitude, high frequency, or both.</p> <h3>In the earth</h3> <p>Radovich and Oliveros (1998) observed in the Gulf of Mexico that sandy facies embedded in a shale matrix frequently show both higher envelope and lower instantaneous frequency than the surrounding shale, and combined the two into this single quantity for that reason. The association is empirical and was established in a particular geological setting.</p> <h3>Limitations</h3> <p>Because the two contributions multiply, a high value can arise from either alone. A tuned reflector of ordinary frequency and a weak low-frequency interval can produce the same value. The envelope and frequency examined separately distinguish these cases.</p> <p>The attribute inherits the gain dependence of the envelope.</p>"}, "wavfreq": {"t": "Wavelet frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>Also called response frequency. The envelope maxima are located, and the instantaneous frequency at each maximum is assigned to every sample between the adjacent envelope minima. The result is one frequency value per reflection event, constant across that event.</p> <p>The reasoning, from Bodine (1984), is that most of the energy in a trace lies near the envelope peaks, which is where the frequency estimate is best conditioned.</p> <h3>High and low values</h3> <p><b>High:</b> a rapidly oscillating reflection event. <b>Low:</b> a slowly oscillating one. The range is bounded in practice because the estimate is taken only where the envelope is large.</p> <h3>In the earth</h3> <p>The same relationships as for instantaneous frequency: bed thickness and attenuation. The measurement is expressed per event rather than per sample.</p> <h3>Limitations</h3> <p>The display is piecewise constant by construction and cannot resolve variation within a single reflection event.</p>"}, "wavphase": {"t": "Wavelet phase", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous phase at each envelope maximum, assigned to every sample between the adjacent envelope minima. It describes the phase character of each reflection event with one value.</p> <h3>High and low values</h3> <p><b>Near 0:</b> the event is centred on a peak, consistent with a zero-phase wavelet and a positive reflection coefficient. <b>Near ±π:</b> centred on a trough, consistent with a negative reflection coefficient. <b>Near ±π/2:</b> the event is not centred on either, which occurs for non-zero-phase wavelets and for thin-bed responses.</p> <h3>In the earth</h3> <p>A lateral change from near 0 to near ±π along one reflector is consistent with a polarity reversal, which occurs where the sign of the impedance contrast changes, as at a fluid contact or a lateral facies change.</p> <h3>Limitations</h3> <p>Wavelet phase also varies with the phase of the source wavelet left by processing, which can vary spatially. A phase change measured on one reflector does not by itself establish a change in reflection coefficient.</p>"}, "avgfreq": {"t": "Average frequency", "c": "attribute", "h": "<h3>What it measures</h3> <p>The instantaneous frequency averaged over a window and weighted by instantaneous power, so samples with strong signal contribute in proportion to their energy and samples with none contribute little. Following Barnes (2016).</p> <h3>High and low values</h3> <p><b>High:</b> the energy in the window is concentrated at higher frequencies. <b>Low:</b> at lower frequencies. The weighting keeps the estimate within the data bandwidth in normal circumstances.</p> <h3>In the earth</h3> <p>Average frequency declines with depth in most sections as the earth attenuates high frequencies along the travel path. Departures from that regional trend indicate local change: thinner bedding raises it, and absorptive or scattering intervals lower it.</p> <h3>Limitations</h3> <p>The window length determines what is measured. A short window follows individual reflection events; a long one characterises intervals. Values from different window lengths are not comparable.</p>"}, "avgband": {"t": "Average bandwidth", "c": "attribute", "h": "<h3>What it measures</h3> <p>The spread of the power-weighted instantaneous frequency distribution within the window, expressed as twice its standard deviation. Where average frequency gives the centre of that distribution, bandwidth gives its width.</p> <h3>High and low values</h3> <p><b>High:</b> the instantaneous frequency varies substantially within the window. <b>Low:</b> it is close to constant.</p> <h3>In the earth</h3> <p>Variation in instantaneous frequency within a window arises from interference between reflections at different spacings, so high bandwidth commonly corresponds to thinly interbedded or heterogeneous intervals. Low bandwidth corresponds to isolated reflections and to monotonous sections.</p> <h3>Limitations</h3> <p>The convention used here is the full bandwidth, twice the standard deviation. Barnes (2016) defines the bandwidth as the standard deviation itself, so values differ by a factor of two between the two conventions.</p> <p>The measurement describes the variation of the instantaneous frequency, which is not the same quantity as the width of the amplitude spectrum. A signal composed of two symmetric tones has a constant instantaneous frequency and therefore near-zero bandwidth by this measure, while its amplitude spectrum is wide.</p>"}, "rms": {"t": "RMS amplitude", "c": "attribute", "h": "<h3>What it measures</h3> <p>The root mean square of the trace within a running window. It is the square root of the mean power in the window.</p> <h3>High and low values</h3> <p><b>High:</b> large mean power in the window. <b>Low:</b> small mean power. The quantity is never negative.</p> <h3>In the earth</h3> <p>Intervals containing many strong reflections read high, and intervals with few or weak reflections read low. On deep reflection data this is the measurement underlying descriptions of crust as reflective or transparent.</p> <h3>Limitations</h3> <p>The window length changes the result. A window comparable to the wavelet length approaches the envelope and follows individual reflections; a longer window characterises intervals.</p> <p>The measurement includes noise, so an interval can read high because its signal-to-noise ratio is low rather than because it contains reflections. Measures based on spatial coherence separate the two.</p> <p>Like all amplitude measurements, it carries the applied gain.</p>"}, "tke": {"t": "Teager-Kaiser energy", "c": "attribute", "h": "<h3>What it measures</h3> <p>The square of the first time derivative of the trace, minus the product of the trace and its second derivative. For a signal of amplitude A and angular frequency ω the operator returns A²ω² exactly.</p> <p>Kaiser (1990) derived it from the energy of a mass on a spring. The seismic energy density given by Sheriff and Geldart (1995) has the same dependence on amplitude and frequency, which is the basis for using the operator as an estimator of it. The attribute therefore responds to amplitude and frequency jointly, unlike RMS amplitude, which responds to amplitude alone.</p> <p>Applied to the analytic trace, the real and imaginary parts each contribute A²ω², so the complex-trace result is twice the real-trace value (Hamila et al., 1999).</p> <h3>High and low values</h3> <p><b>High:</b> large amplitude, high frequency, or both. <b>Low:</b> small amplitude, low frequency, or both. The output is non-negative. Two reflections of equal amplitude but different frequency give different values.</p> <h3>In the earth</h3> <p>The attribute is high where strong reflections coincide with well-resolved, higher-frequency character, and low in weak or attenuated intervals. Because it is a squared quantity its own frequency content is lower than that of the input, so it mixes vertically over a longer interval than the reflection data.</p> <h3>Limitations</h3> <p>The output is non-negative and therefore has a non-zero mean, which prevents its use as input to coherence and similar attributes. The Teager-Kaiser variation is the zero-mean formulation.</p> <p>The derivatives are computed with smooth noise-robust filters, which are low-pass by construction and under-estimate the derivative as frequency rises. On 2 ms data the 7-point filter returns 0.988 of the true derivative at 10 Hz and 0.806 at 45 Hz, so the energy, being quadratic in the derivative, reads about 35 percent low at 45 Hz. Values are therefore not directly comparable across widely separated frequencies. A shorter filter reduces the effect and is less resistant to noise.</p>"}, "tkv": {"t": "Teager-Kaiser variation", "c": "attribute", "h": "<h3>What it measures</h3> <p>The Teager-Kaiser energy, bandpass filtered and then Hilbert transformed. The filtering removes the non-zero mean and the Hilbert transform converts the result into an oscillatory quantity. Following Matos (2018).</p> <h3>High and low values</h3> <p>The quantity oscillates about zero. Zero crossings occur where the underlying energy changes most rapidly with time, so the transitions rather than the extrema mark the boundaries between intervals of differing energy.</p> <h3>In the earth</h3> <p>Boundaries between packages of differing reflection energy: the tops and bases of reflective intervals, unconformities, and lateral changes in reflection character.</p> <h3>Limitations</h3> <p>Its frequency content is lower than that of the input, so it resolves less detail.</p> <p>Polarity information is lost at the energy step, so the sign of the output derives from the transform rather than from the reflection coefficient.</p>"}, "avt": {"t": "Amplitude volume transform", "c": "attribute", "h": "<h3>What it measures</h3> <p>Three operations, from Bulhões (1999). The envelope is computed, its RMS is taken in a short window, and an inverse Hilbert transform is applied to that RMS envelope. The last step converts a smooth non-negative quantity into an oscillatory zero-mean one that responds to vertical change in the energy.</p> <h3>High and low values</h3> <p>The quantity oscillates about zero. Zero crossings mark where the RMS envelope changes most rapidly with time, so the display outlines the boundaries of energy packages rather than their interiors.</p> <h3>In the earth</h3> <p>The attribute was developed for mapping structural and stratigraphic features and is applied to faults, channels, carbonate bodies, unconformities and reflector terminations, all of which involve abrupt vertical or lateral change in reflection energy.</p> <h3>Limitations</h3> <p>The output has lower frequency content than the input. The window length controls this: shorter windows retain more detail and more noise.</p> <p>Polarity is discarded at the envelope step, so the sign of the output is a property of the transform rather than of the reflection coefficient.</p>"}, "rai": {"t": "Relative acoustic impedance", "c": "attribute", "h": "<h3>What it measures</h3> <p>The trace integrated with respect to time in the frequency domain, then bandpass filtered. Seismic amplitude approximates the reflection coefficient, which is a function of the change in acoustic impedance across an interface; integration recovers a quantity proportional to the impedance of the layer itself, within the seismic bandwidth.</p> <p>Integration divides the spectrum by iω, which rotates the phase by −90 degrees, amplifies low frequencies and attenuates high ones. The bandpass filter limits the amplification of frequencies below those present in the data.</p> <h3>High and low values</h3> <p><b>High:</b> higher acoustic impedance relative to the surrounding section. <b>Low:</b> lower. The phase rotation places layer boundaries at zero crossings and layer interiors at extrema, so the display represents layers rather than contacts.</p> <h3>In the earth</h3> <p>Acoustic impedance is the product of velocity and density, so high values commonly correspond to carbonates, tight or cemented sands and other consolidated lithologies, and low values to shales, porous sands and gas-charged intervals.</p> <h3>Limitations</h3> <p>The integration constant is not recoverable and the low frequencies are absent from seismic data, so the result is relative within the passband and has no absolute datum. Two intervals of genuinely different impedance can display the same level.</p> <p>The derivation assumes a zero-phase wavelet approximating a spike and small reflection coefficients. Departures from these assumptions, particularly residual wavelet phase, are carried into the result.</p>"}, "dip": {"t": "Apparent dip", "c": "attribute", "h": "<h3>What it measures</h3> <p>The local slope of the reflectors in samples per trace, taken from the eigenvector of the gradient structure tensor associated with the smaller eigenvalue. This is the same estimate that steers the structure-oriented smoothing.</p> <h3>High and low values</h3> <p>The sign gives the direction of dip within the plane of the section and the magnitude its steepness. Zero is a horizontal event.</p> <h3>In the earth</h3> <p>Smoothly varying dip maps folds and regional structural gradient. Abrupt lateral changes in dip occur at faults, and angular relationships between dip domains occur at unconformities.</p> <h3>Limitations</h3> <p>On a 2D line the quantity is apparent dip in the direction of the line. A reflector dipping partly out of the plane of the section reads shallower than its true dip, and the true dip cannot be recovered without a second azimuth.</p> <p>Where no coherent event is present the tensor still returns an orientation. The linearity attribute indicates where the dip estimate is supported by the data.</p>"}, "linearity": {"t": "Linearity", "c": "attribute", "h": "<h3>What it measures</h3> <p>The difference of the two structure-tensor eigenvalues divided by their sum, giving a value between 0 and 1. It quantifies how strongly the local image is dominated by a single orientation.</p> <h3>High and low values</h3> <p><b>Near 1:</b> the image has one clear orientation, as for a well-defined reflector. <b>Near 0:</b> no preferred orientation, as for random noise, chaotic reflection character, or the intersection of events with different dips.</p> <h3>In the earth</h3> <p>High linearity corresponds to continuous layered reflections. Low linearity corresponds to disrupted zones, chaotic facies such as mass transport deposits, and intervals where the signal-to-noise ratio is low.</p> <h3>Limitations</h3> <p>Low linearity does not distinguish geological disruption from noise, since neither has a dominant orientation.</p>"}, "coherence": {"t": "In-line coherence", "c": "attribute", "h": "<h3>What it measures</h3> <p>Semblance computed along the local dip across a small group of adjacent traces. It is the ratio of the energy of the summed traces to the summed energy of the individual traces, and quantifies waveform similarity between neighbouring traces once their dip has been accounted for.</p> <h3>High and low values</h3> <p><b>Near 1:</b> adjacent traces are similar, corresponding to a laterally continuous reflection. <b>Low:</b> adjacent traces differ. Unlike most attributes, the low values carry the structural information.</p> <h3>In the earth</h3> <p>Lateral waveform change occurs at faults, channel margins, reef edges, and stratigraphic terminations, all of which produce low coherence.</p> <h3>Limitations</h3> <p>On a 2D line the measurement is made only along the line. A fault striking parallel to the section produces no waveform difference between adjacent traces on the same side of it and is not detected. This is the principal reason coherence is normally computed on 3D volumes.</p> <p>Low signal-to-noise ratio reduces trace similarity and lowers coherence independently of structure.</p>"}, "band": {"t": "Spectral band", "c": "attribute", "h": "<h3>What it measures</h3> <p>The envelope of a single narrow frequency band, isolated with a constant-Q Gaussian filter so that the time resolution scales with the centre frequency. Stepping the centre frequency through the data bandwidth shows how energy is distributed across frequency.</p> <h3>High and low values</h3> <p><b>High:</b> substantial energy at that frequency at that location. <b>Low:</b> little. Values from different bands are comparable only within the range where the data carries energy.</p> <h3>In the earth</h3> <p>A bed reaches maximum reflection amplitude at the frequency whose quarter wavelength matches its thickness, so thin beds are most prominent in higher bands and thicker beds in lower ones. Comparison across bands is therefore sensitive to layer thickness. Intervals bright at low frequency and weak at high frequency indicate preferential loss of high frequencies, which arises from absorption, from scattering in heterogeneous media, and from thin-bed interference.</p> <h3>Limitations</h3> <p>Bands outside the range where the data has energy contain mostly noise. The spectrum shown in the f-k display gives the range within which band comparison is meaningful.</p>"}, "rgb": {"t": "Three-band RGB blend", "c": "attribute", "h": "<h3>What it measures</h3><p>Three narrow frequency bands are extracted with constant-Q Gaussian filters, their envelopes taken, and each mapped to one channel of a colour image: the low band to red, the middle to green, the high to blue. Each channel is scaled to its own 99th percentile, so the three are displayed at comparable strength.</p><h3>High and low values</h3><p>Colour encodes which part of the spectrum carries the energy rather than how much there is. <b>Warm colours</b> indicate the low band dominates locally, <b>blue</b> that the high band does, and <b>grey or white</b> that all three are comparable. Dark areas have little energy in any band.</p><h3>In the earth</h3><p>Because a bed reaches maximum amplitude at the frequency whose quarter wavelength matches its thickness, a lateral change in colour along one interval corresponds to a change in the thickness or spacing of the layering producing it. A downward shift from blue toward red follows the preferential loss of high frequencies with depth, from absorption and from scattering. On legacy deep data the usable bandwidth is narrow, so the three bands are placed around the chosen centre frequency rather than spread across the whole spectrum.</p><h3>Limitations</h3><p>The independent scaling of the three channels means colour is relative within each band and not comparable between surveys or between parameter settings. Bands outside the range where the data carries energy contribute noise to their channel, which appears as a uniform colour cast.</p><p>The display has no single numeric value, so no colour bar is drawn and the hover readout does not apply.</p>"}, "display": {"t": "Amplitude, scale and vertical exaggeration", "c": "concept", "h": "<h3>Amplitude</h3><p>Three panels share one gain field, computed from the input and applied to all of them, so the removed panel is displayed at the same scale as what it came from.</p><p><b>As recorded</b> applies nothing. <b>Time gain</b> multiplies by t raised to a power, one smooth curve applied to every trace alike, which counters spherical divergence and attenuation while leaving lateral amplitude relations intact. <b>AGC</b> normalises by the local RMS in a window, which opens up the deep record further but scales every sample by a different factor.</p><p>The distinction matters for the amplitude-based attributes. Under a t-power gain the envelope, sweetness and relative acoustic impedance remain comparable from trace to trace, because the gain depends only on time. Under AGC they do not.</p><h3>Vertical exaggeration</h3><p>The ratio between the vertical and horizontal scales of the display. At 1x the section is drawn true to scale and a dip measured off it is the dip in the ground. Reflection sections are conventionally shown near 3x, which makes bedding easier to follow at the cost of steepening every dip.</p><p>The exaggeration is computed from the trace spacing and a velocity. Legacy trace headers rarely record the spacing, so it is entered by hand; COCORP CDP spacing is typically 50 to 100 m. The depth column on the time axis uses one velocity for the whole section and is a scale rather than a conversion.</p><h3>Limitations</h3><p>A dip read from an exaggerated display is not the dip of the reflector. At 3x, a bed dipping 33 degrees is drawn at 63. On an unmigrated section the reflector is also not in its true position, so both corrections apply.</p>"}, "compare": {"t": "Comparing several attributes", "c": "concept", "h": "<h3>What the panel shows</h3><p>Any selection of attributes computed on the current crop and drawn on a shared time axis. The intermediates several of them need, the analytic trace and the structure tensor, are computed once for the whole set, so eight attributes on a 500,000-sample crop take well under a second.</p><h3>The correlation matrix</h3><p>Pearson correlation between every displayed pair, on a subsample. It answers a question that the panels themselves cannot: whether the attributes are measuring different things.</p><p>Measured on COCORP Wyoming Line 1, envelope correlates 0.98 with RMS amplitude, 0.97 with sweetness and 0.91 with Teager-Kaiser energy. Those four are one measurement expressed four ways. Displaying them side by side gives four panels but one dimension, and anything computed from the set as though it had four will be dominated by amplitude. Coherence and linearity correlate 0.78 on the same data, both being derived from the structure tensor.</p><p>The default selection is chosen so that no pair exceeds 0.5.</p><h3>Limitations</h3><p>Correlation is computed on the signed values. A signed attribute and a magnitude can read near zero while their magnitudes track each other closely, so a low number is not on its own proof of independence.</p><p>Pearson correlation measures linear association only. Two attributes related through a curve can read low and still carry the same information.</p><p>The attributes are computed on the kept section, so the correlations reflect the filters currently applied as well as the data.</p>"}};
+const HELP_ORDER = ["start", "display", "compare", "fk", "sos", "detail", "envelope", "insphase", "cosphase", "insfreq", "unwrap", "sweetness", "wavfreq", "wavphase", "avgfreq", "avgband", "rms", "tke", "tkv", "avt", "rai", "dip", "linearity", "coherence", "band", "rgb"];
 
 /* Reference text opens in its own window, so it can sit beside the tool while
    the controls are being worked. One window is reused for every topic. */
@@ -1798,167 +1857,155 @@ function runFilters(){
   redraw();
 }
 
+/* One place that knows how to compute any attribute, given a cache of the
+   intermediates several of them share. Computing six attributes without this
+   would build the analytic signal six times. */
+const ATTR_META = {
+  envelope:{n:"Envelope",s:"env"},        insphase:{n:"Instantaneous phase",s:"phase"},
+  cosphase:{n:"Cosine of phase",s:"cos\u03c6"}, insfreq:{n:"Instantaneous frequency",s:"f inst"},
+  unwrap:{n:"Unwrapped phase",s:"unwrap"}, sweetness:{n:"Sweetness",s:"sweet"},
+  wavfreq:{n:"Wavelet frequency",s:"f wav"}, wavphase:{n:"Wavelet phase",s:"\u03c6 wav"},
+  avgfreq:{n:"Average frequency",s:"f avg"}, avgband:{n:"Average bandwidth",s:"bandw"},
+  rms:{n:"RMS amplitude",s:"rms"},        tke:{n:"Teager-Kaiser energy",s:"TKE"},
+  tkv:{n:"Teager-Kaiser variation",s:"TKV"}, avt:{n:"Amplitude volume transform",s:"AVT"},
+  rai:{n:"Relative acoustic impedance",s:"RAI"}, dip:{n:"Apparent dip",s:"dip"},
+  linearity:{n:"Linearity",s:"linear"},   coherence:{n:"In-line coherence",s:"coher"},
+  band:{n:"Spectral band",s:"band"},      rgb:{n:"Three-band RGB blend",s:"RGB"}
+};
+const CBLAB = {envelope:"amplitude", cosphase:"cos phase", insfreq:"Hz",
+               dip:"samples/trace", linearity:"linearity", coherence:"semblance",
+               sweetness:"sweetness", band:"amplitude", rms:"amplitude",
+               rai:"impedance", tke:"energy", tkv:"variation", avt:"AVT",
+               insphase:"radians", unwrap:"radians", wavfreq:"Hz",
+               wavphase:"radians", avgfreq:"Hz", avgband:"Hz"};
+
+function attrCache(){
+  const {nx, ns, dt} = SEG, dts = dt * 1e-6;
+  const c = {nx, ns, dts};
+  return {
+    get A(){ return c._A || (c._A = analyticSignal(KEPT, nx, ns)); },
+    get env(){ return c._e || (c._e = attrEnvelope(this.A)); },
+    get phase(){
+      if (!c._p){ const A = this.A, o = new Float32Array(nx*ns);
+        for (let k=0;k<o.length;k++) o[k] = Math.atan2(A.im[k], A.re[k]);
+        c._p = o; }
+      return c._p;
+    },
+    get freq(){ return c._f || (c._f = attrInstFreq(this.A, this.env, nx, ns, dts)); },
+    get rate(){ return c._r || (c._r = attrPhaseRate(this.A, this.env, nx, ns, dts)); },
+    nx, ns, dts
+  };
+}
+
+function computeOne(key, p, C){
+  const {nx, ns, dts} = C;
+  const nyq = 0.5 / dts;
+  const K = Math.max(1, Math.round(p.attrWin*1e-3/dts/2));
+  const band = [5, 10, Math.min(60, nyq*0.5), Math.min(70, nyq*0.6)];
+  const sym = a => { const m = Math.max(Math.abs(percentile(a,1)),
+                                        Math.abs(percentile(a,99))) || 1e-9;
+                     return [-m, m]; };
+  let a, vmin, vmax, cmap = "magma", unit = "";
+
+  switch (key){
+    case "dip": {
+      a = TENSOR.dip;
+      const m = Math.max(Math.abs(percentile(a,2)), Math.abs(percentile(a,98)), 0.05);
+      vmin=-m; vmax=m; cmap="coolwarm";
+      unit="samples per trace, in the line direction only"; break; }
+    case "linearity":
+      a = TENSOR.lin; vmin=0; vmax=1; cmap="viridis";
+      unit="0 where the image has no preferred orientation, 1 where it is layered"; break;
+    case "coherence":
+      a = attrCoherence(KEPT, TENSOR.dip, nx, ns, 5, 15); vmin=0; vmax=1; cmap="viridis";
+      unit="continuity along the line only; a fault striking with the line will not show";
+      break;
+    case "rms":
+      a = attrRMS(KEPT, nx, ns, K); vmin=0; vmax=percentile(a,99);
+      unit="running window of +/-" + (p.attrWin/2).toFixed(0) + " ms"; break;
+    case "rai":
+      a = attrRAI(KEPT, nx, ns, dts, band[0], band[1], band[2], band[3]);
+      [vmin, vmax] = sym(a); cmap="batlow";
+      unit="trace integration then Ormsby; band-limited, no absolute datum"; break;
+    case "tke":
+      a = attrTKE(KEPT, nx, ns, dts, p.attrDl, true); vmin=0; vmax=percentile(a,99);
+      unit="complex trace, " + p.attrDl + "-point derivative; reads low at high frequency";
+      break;
+    case "tkv":
+      a = attrTKV(attrTKE(KEPT, nx, ns, dts, p.attrDl, true), nx, ns, dts,
+                  band[0], band[1], band[2], band[3]);
+      [vmin, vmax] = sym(a); cmap="coolwarm";
+      unit="bandpassed energy, then Hilbert; zero mean, so it can feed coherence"; break;
+    case "band":
+      a = attrSpectralBand(KEPT, nx, ns, dts, p.attrFc, 3.0);
+      vmin=0; vmax=percentile(a,99);
+      unit="constant-Q Gaussian band at " + p.attrFc + " Hz, then envelope"; break;
+    case "avt":
+      a = attrAVT(C.env, nx, ns, K); [vmin, vmax] = sym(a); cmap="gray";
+      unit="RMS envelope over +/-" + (p.attrWin/2).toFixed(0) +
+           " ms, then inverse Hilbert; zero mean"; break;
+    case "envelope":
+      a = C.env; vmin=0; vmax=percentile(a,99);
+      unit="instantaneous amplitude, insensitive to polarity"; break;
+    case "insphase":
+      a = C.phase; vmin=-Math.PI; vmax=Math.PI; cmap="coolwarm";
+      unit="radians; wraps at +/-pi"; break;
+    case "cosphase": {
+      const A = C.A; a = new Float32Array(nx*ns);
+      for (let k=0;k<a.length;k++) a[k] = A.re[k]/(Math.hypot(A.re[k],A.im[k])+1e-30);
+      vmin=-1; vmax=1; cmap="gray";
+      unit="every event at equal strength, so weak ones show alongside bright ones";
+      break; }
+    case "insfreq":
+      a = C.freq; vmin=percentile(a,2); vmax=percentile(a,98); cmap="viridis";
+      unit="Hz; unstable wherever the envelope is small"; break;
+    case "unwrap":
+      a = attrUnwrap(C.rate, C.env, C.phase, nx, ns, dts);
+      vmin=percentile(a,1); vmax=percentile(a,99); cmap="viridis";
+      unit="radians, integrated without wrapping (Vesnaver, 2017)"; break;
+    case "sweetness": {
+      const e = C.env, f = C.freq; a = new Float32Array(e.length);
+      for (let k=0;k<a.length;k++) a[k] = e[k]/Math.sqrt(Math.max(Math.abs(f[k]),1));
+      vmin=0; vmax=percentile(a,99);
+      unit="envelope divided by the square root of frequency"; break; }
+    case "wavfreq":
+      a = attrWavelet(C.env, C.freq, nx, ns, 1e-3);
+      vmin=0; vmax=Math.min(nyq, percentile(a,98)); cmap="viridis";
+      unit="Hz, held constant between envelope minima (Bodine, 1984)"; break;
+    case "wavphase":
+      a = attrWavelet(C.env, C.phase, nx, ns, 1e-3);
+      vmin=-Math.PI; vmax=Math.PI; cmap="coolwarm";
+      unit="radians, taken at the envelope peak of each lobe"; break;
+    case "avgfreq":
+      a = attrAvgFreq(C.env, C.freq, nx, ns, K, false);
+      vmin=0; vmax=Math.min(nyq, percentile(a,98)); cmap="viridis";
+      unit="Hz, power-weighted over +/-" + (p.attrWin/2).toFixed(0) + " ms"; break;
+    case "avgband":
+      a = attrAvgFreq(C.env, C.freq, nx, ns, K, true);
+      vmin=0; vmax=percentile(a,98); cmap="viridis";
+      unit="Hz, 2*sigma of the power-weighted frequency distribution"; break;
+    case "rgb": {
+      const fLo = Math.max(2, p.attrFc/1.8), fHi = Math.min(0.48/dts, p.attrFc*1.8);
+      const R = attrSpectralBand(KEPT, nx, ns, dts, fLo, 3.0);
+      const G = attrSpectralBand(KEPT, nx, ns, dts, p.attrFc, 3.0);
+      const B = attrSpectralBand(KEPT, nx, ns, dts, fHi, 3.0);
+      return {key, rgb:[R,G,B],
+              scales:[percentile(R,99), percentile(G,99), percentile(B,99)],
+              title:ATTR_META.rgb.n, cbLabel:"",
+              unit:"red " + fLo.toFixed(0) + " Hz, green " + p.attrFc.toFixed(0) +
+                   " Hz, blue " + fHi.toFixed(0) + " Hz"}; }
+    default: return null;
+  }
+  return {key, a, vmin, vmax, cmapDefault:cmap, unit,
+          title:ATTR_META[key].n, cbLabel:CBLAB[key] || ""};
+}
+
 function computeAttribute(){
   const p = readParams();
   if (!SEG || !KEPT || p.attr === "none"){ ATTR = null; return; }
   const key = [p.attr, p.attrFc, p.attrWin, p.attrDl].join("|");
   if (key === ATTRKEY && ATTR) return;
-  const {nx, ns, dt} = SEG, dts = dt * 1e-6;
-  let a, title, cmapDefault = "magma", vmin = null, vmax = null, unit = "";
-
-  if (p.attr === "dip"){
-    a = TENSOR.dip;
-    const m = Math.max(Math.abs(percentile(a, 2)), Math.abs(percentile(a, 98)), 0.05);
-    vmin = -m; vmax = m; cmapDefault = "coolwarm";
-    title = "Apparent dip";
-    unit = "samples per trace, in the line direction only";
-  } else if (p.attr === "linearity"){
-    a = TENSOR.lin; vmin = 0; vmax = 1; cmapDefault = "viridis";
-    title = "Linearity";
-    unit = "0 where the image has no preferred orientation, 1 where it is layered";
-  } else if (p.attr === "coherence"){
-    a = attrCoherence(KEPT, TENSOR.dip, nx, ns, 5, 15);
-    vmin = 0; vmax = 1; cmapDefault = "viridis";
-    title = "In-line semblance coherence";
-    unit = "continuity along the line only; a fault striking with the line will not show";
-  } else if (p.attr === "rms"){
-    a = attrRMS(KEPT, nx, ns, Math.max(1, Math.round(p.attrWin*1e-3/dts/2)));
-    vmin = 0; vmax = percentile(a, 99);
-    title = "RMS amplitude";
-    unit = "running window of +/-" + (p.attrWin/2).toFixed(0) + " ms";
-  } else if (p.attr === "rai"){
-    const nyq = 0.5/dts;
-    a = attrRAI(KEPT, nx, ns, dts, 5, 10, Math.min(60, nyq*0.5),
-                Math.min(70, nyq*0.6));
-    const m1 = Math.max(Math.abs(percentile(a,1)), Math.abs(percentile(a,99)));
-    vmin = -m1; vmax = m1; cmapDefault = "batlow";
-    title = "Relative acoustic impedance";
-    unit = "trace integration, Ormsby 5-10-60-70 Hz; band-limited, no absolute datum";
-  } else if (p.attr === "tke" || p.attr === "tkv"){
-    const tke = attrTKE(KEPT, nx, ns, dts, p.attrDl, true);
-    if (p.attr === "tke"){
-      a = tke; vmin = 0; vmax = percentile(a, 99);
-      title = "Teager-Kaiser energy";
-      unit = "complex trace, " + p.attrDl + "-point derivative; reads low at high frequency";
-    } else {
-      const nyq = 0.5/dts;
-      a = attrTKV(tke, nx, ns, dts, 5, 10, Math.min(60, nyq*0.5),
-                  Math.min(70, nyq*0.6));
-      const m2 = Math.max(Math.abs(percentile(a,1)), Math.abs(percentile(a,99)));
-      vmin = -m2; vmax = m2; cmapDefault = "coolwarm";
-      title = "Teager-Kaiser variation";
-      unit = "bandpassed energy, then Hilbert; zero mean, so it can feed coherence";
-    }
-  } else if (p.attr === "rgb"){
-    /* Three constant-Q bands mapped to red, green and blue, each scaled to its
-       own 99th percentile. Colour then encodes which part of the spectrum
-       carries the energy: warm where the low band dominates, blue where the
-       high band does, grey where all three are equal. On legacy deep data the
-       usable bandwidth is narrow, so the bands are spaced about the centre
-       frequency rather than spread across the whole spectrum. */
-    const fLo = Math.max(2, p.attrFc/1.8), fHi = Math.min(0.48/dts, p.attrFc*1.8);
-    const R = attrSpectralBand(KEPT, nx, ns, dts, fLo, 3.0);
-    const G = attrSpectralBand(KEPT, nx, ns, dts, p.attrFc, 3.0);
-    const B = attrSpectralBand(KEPT, nx, ns, dts, fHi, 3.0);
-    ATTR = {rgb:[R,G,B], scales:[percentile(R,99), percentile(G,99), percentile(B,99)],
-            title:"Three-band RGB blend",
-            unit:"red " + fLo.toFixed(0) + " Hz, green " + p.attrFc.toFixed(0) +
-                 " Hz, blue " + fHi.toFixed(0) + " Hz",
-            cbLabel:""};
-    ATTRKEY = key;
-    return;
-  } else if (p.attr === "band"){
-    a = attrSpectralBand(KEPT, nx, ns, dts, p.attrFc, 3.0);
-    vmin = 0; vmax = percentile(a, 99);
-    title = p.attrFc + " Hz band envelope";
-    unit = "constant-Q Gaussian band, then envelope";
-  } else {
-    const A = analyticSignal(KEPT, nx, ns);
-    if (p.attr === "avt"){
-      a = attrAVT(attrEnvelope(A), nx, ns,
-                  Math.max(1, Math.round(p.attrWin*1e-3/dts/2)));
-      const m3 = Math.max(Math.abs(percentile(a,1)), Math.abs(percentile(a,99)));
-      vmin = -m3; vmax = m3; cmapDefault = "gray";
-      title = "Amplitude volume transform";
-      unit = "RMS envelope over +/-" + (p.attrWin/2).toFixed(0) +
-             " ms, then inverse Hilbert; zero mean";
-    } else if (p.attr === "insphase"){
-      a = new Float32Array(nx*ns);
-      for (let k=0;k<a.length;k++) a[k] = Math.atan2(A.im[k], A.re[k]);
-      vmin = -Math.PI; vmax = Math.PI; cmapDefault = "coolwarm";
-      title = "Instantaneous phase";
-      unit = "radians; wraps at +/-pi";
-    } else if (p.attr === "unwrap"){
-      const e0 = attrEnvelope(A);
-      const ph = new Float32Array(nx*ns);
-      for (let k=0;k<ph.length;k++) ph[k] = Math.atan2(A.im[k], A.re[k]);
-      a = attrUnwrap(attrPhaseRate(A, e0, nx, ns, dts), e0, ph, nx, ns, dts);
-      vmin = percentile(a, 1); vmax = percentile(a, 99); cmapDefault = "viridis";
-      title = "Unwrapped phase";
-      unit = "radians, integrated without wrapping (Vesnaver, 2017)";
-    } else if (p.attr === "wavfreq" || p.attr === "wavphase" ||
-               p.attr === "avgfreq" || p.attr === "avgband"){
-      const e1 = attrEnvelope(A);
-      const f1 = attrInstFreq(A, e1, nx, ns, dts);
-      if (p.attr === "wavfreq"){
-        a = attrWavelet(e1, f1, nx, ns, 1e-3);
-        vmin = 0; vmax = Math.min(0.5/dts, percentile(a, 98));
-        cmapDefault = "viridis";
-        title = "Wavelet frequency";
-        unit = "Hz, held constant between envelope minima (Bodine, 1984)";
-      } else if (p.attr === "wavphase"){
-        const ph1 = new Float32Array(nx*ns);
-        for (let k=0;k<ph1.length;k++) ph1[k] = Math.atan2(A.im[k], A.re[k]);
-        a = attrWavelet(e1, ph1, nx, ns, 1e-3);
-        vmin = -Math.PI; vmax = Math.PI; cmapDefault = "coolwarm";
-        title = "Wavelet phase";
-        unit = "radians, taken at the envelope peak of each lobe";
-      } else {
-        const K = Math.max(1, Math.round(p.attrWin*1e-3/dts/2));
-        a = attrAvgFreq(e1, f1, nx, ns, K, p.attr === "avgband");
-        cmapDefault = "viridis";
-        if (p.attr === "avgfreq"){
-          vmin = 0; vmax = Math.min(0.5/dts, percentile(a, 98));
-          title = "Average frequency";
-          unit = "Hz, power-weighted over +/-" + (p.attrWin/2).toFixed(0) + " ms";
-        } else {
-          vmin = 0; vmax = percentile(a, 98);
-          title = "Average bandwidth";
-          unit = "Hz, 2*sigma of the power-weighted frequency distribution";
-        }
-      }
-    } else if (p.attr === "envelope"){
-      a = attrEnvelope(A); vmin = 0; vmax = percentile(a, 99);
-      title = "Envelope";
-      unit = "instantaneous amplitude, insensitive to polarity";
-    } else if (p.attr === "cosphase"){
-      a = attrCosPhase(A); vmin = -1; vmax = 1; cmapDefault = "gray";
-      title = "Cosine of instantaneous phase";
-      unit = "every event at equal strength, so weak ones show alongside bright ones";
-    } else if (p.attr === "insfreq"){
-      a = attrInstFreq(A, attrEnvelope(A), nx, ns, dts);
-      vmin = percentile(a, 2); vmax = percentile(a, 98);
-      cmapDefault = "viridis";
-      title = "Instantaneous frequency";
-      unit = "Hz; unstable wherever the envelope is small, which is most of a deep record";
-    } else if (p.attr === "sweetness"){
-      const e = attrEnvelope(A);
-      const f = attrInstFreq(A, e, nx, ns, dts);
-      a = new Float32Array(e.length);
-      for (let k=0;k<a.length;k++) a[k] = e[k] / Math.sqrt(Math.max(Math.abs(f[k]), 1));
-      vmin = 0; vmax = percentile(a, 99);
-      title = "Sweetness";
-      unit = "envelope divided by the square root of frequency";
-    }
-  }
-  const CBLAB = {envelope:"amplitude", cosphase:"cos phase", insfreq:"Hz",
-                 dip:"samples/trace", linearity:"linearity",
-                 coherence:"semblance", sweetness:"sweetness",
-                 band:"amplitude", rms:"amplitude", rai:"impedance",
-                 tke:"energy", tkv:"variation", avt:"AVT",
-                 insphase:"radians", unwrap:"radians", wavfreq:"Hz",
-                 wavphase:"radians", avgfreq:"Hz", avgband:"Hz"};
-  ATTR = {a, title, unit, vmin, vmax, cmapDefault, cbLabel: CBLAB[p.attr] || ""};
+  ATTR = computeOne(p.attr, p, attrCache());
   ATTRKEY = key;
 }
 
@@ -2154,6 +2201,7 @@ function applyCrop(){
   SEG.data = out; SEG.nx = nx; SEG.ns = ns; SEG.j0 = j0;
   SEG.cdp = SEG.cdpAll.slice(i0, i1);
   fkCache = null; KEPT = null;
+  MULTI = []; if (typeof drawMulti === "function") drawMulti();
   const ms = v => Math.round(v*SEG.dt*1e-3);
   $("ci0").value = i0; $("ci1").value = i1-1;
   $("cj0").value = ms(j0); $("cj1").value = ms(j1-1);
@@ -2426,6 +2474,160 @@ document.addEventListener("click", e => {
   if (b) loadSample(b.dataset.sample);
 });
 renderSampleList();
+
+
+/* ================= multi-attribute comparison ================= */
+let MULTI = [];          // computed attribute objects, in display order
+const MULTI_ORDER = ["envelope","cosphase","insphase","insfreq","unwrap","sweetness",
+  "wavfreq","wavphase","avgfreq","avgband","rms","tke","tkv","avt","rai",
+  "dip","linearity","coherence","band"];
+/* A default set chosen so that no pair repeats a measurement. Measured on
+   COCORP WY01, envelope correlates 0.98 with RMS amplitude, 0.97 with
+   sweetness and 0.91 with Teager-Kaiser energy, so only one of those four is
+   here. Within this set the strongest pair is envelope and coherence at 0.50.
+   Coherence and linearity correlate 0.78, so both are not included either. */
+const MULTI_SIX = ["envelope","cosphase","avgfreq","avgband","dip","coherence"];
+
+function renderMultiList(){
+  $("multiList").innerHTML = MULTI_ORDER.map(k =>
+    '<label><input type="checkbox" value="' + k + '">' +
+    ATTR_META[k].n + "</label>").join("");
+}
+function multiSelected(){
+  return Array.from($("multiList").querySelectorAll("input:checked")).map(i => i.value);
+}
+function setMultiSelection(keys){
+  for (const i of $("multiList").querySelectorAll("input"))
+    i.checked = keys.includes(i.value);
+}
+
+function runMulti(){
+  if (!SEG || !KEPT){ return; }
+  const keys = multiSelected();
+  if (!keys.length){ MULTI = []; drawMulti(); return; }
+  const p = readParams();
+  const t0 = Date.now();
+  const C = attrCache();                 // analytic signal and tensor computed once
+  MULTI = keys.map(k => computeOne(k, p, C)).filter(Boolean);
+  $("multiNote").textContent =
+    keys.length + " computed in " + ((Date.now()-t0)/1000).toFixed(1) + " s on " +
+    SEG.nx + " x " + SEG.ns + " samples.";
+  drawMulti();
+  drawCorrelation();
+}
+
+function drawMulti(){
+  const grid = $("multiGrid");
+  if (!MULTI.length){ $("multiPanel").hidden = true; grid.innerHTML = ""; return; }
+  const p = readParams();
+  const h = +$("multiH").value;
+  $("multiPanel").hidden = false;
+  $("multiCap").textContent =
+    MULTI.length + " attributes on the current crop, same time axis";
+  grid.innerHTML = MULTI.map((m, i) =>
+    '<div class="mcard"><div class="mhead"><b>' + m.title + "</b><span>" + m.unit +
+    '</span><button data-drop="' + m.key + '" title="Remove">\u00d7</button></div>' +
+    '<div class="mbody" style="height:' + h + 'px">' +
+    '<canvas class="axis" id="my' + i + '"></canvas>' +
+    '<div class="mplot"><canvas id="mc' + i + '"></canvas></div></div>' +
+    '<div class="mscale"><span>' + (m.rgb ? "low band" : fmtTick(m.vmin, (m.vmax-m.vmin)/4)) +
+    "</span><span>" + (m.cbLabel || "") + "</span><span>" +
+    (m.rgb ? "high band" : fmtTick(m.vmax, (m.vmax-m.vmin)/4)) + "</span></div></div>").join("");
+
+  const {nx, ns, dt} = SEG;
+  const j0 = SEG.j0 || 0;
+  const ms0 = j0*dt*1e-3, ms1 = (j0+ns-1)*dt*1e-3;
+  const useSec = (ms1-ms0) >= 4000;
+  const t0 = useSec ? ms0/1000 : ms0, t1 = useSec ? ms1/1000 : ms1;
+  MULTI.forEach((m, i) => {
+    if (m.rgb) drawRGB($("mc"+i), m.rgb, m.scales, nx, ns);
+    else drawRange($("mc"+i), m.a, nx, ns, m.vmin, m.vmax, buildALUT(m.cmapDefault));
+  });
+  requestAnimationFrame(() => {
+    MULTI.forEach((m, i) =>
+      drawYAxis("my"+i, t0, t1, useSec ? "s" : "ms", useSec ? 1 : 1e-3, 0));
+  });
+}
+
+/* Pearson correlation on a subsample. Attributes measuring the same physical
+   quantity in different words will show here as a pair near 1, which is worth
+   knowing before treating a set of them as independent dimensions. */
+function drawCorrelation(){
+  const real = MULTI.filter(m => !m.rgb);
+  if (real.length < 2){ $("corrWrap").hidden = true; return; }
+  $("corrWrap").hidden = false;
+  const N = real[0].a.length;
+  const stride = Math.max(1, Math.floor(N/120000));
+  const cols = real.map(m => {
+    const v = [];
+    for (let k=0;k<N;k+=stride){ const x = m.a[k]; if (isFinite(x)) v.push(x); }
+    let mu=0; for (const x of v) mu+=x; mu/=v.length;
+    let sd=0; for (const x of v) sd+=(x-mu)*(x-mu); sd=Math.sqrt(sd/v.length)||1;
+    return {v, mu, sd};
+  });
+  const n = real.length, R = [];
+  for (let i=0;i<n;i++){
+    R.push([]);
+    for (let j=0;j<n;j++){
+      if (j < i){ R[i].push(R[j][i]); continue; }
+      const A = cols[i], B = cols[j];
+      const L = Math.min(A.v.length, B.v.length);
+      let acc = 0;
+      for (let k=0;k<L;k++) acc += (A.v[k]-A.mu)*(B.v[k]-B.mu);
+      R[i].push(Math.max(-1, Math.min(1, acc/(L*A.sd*B.sd))));
+    }
+  }
+  const lut = buildALUT("vik");
+  const cell = r => {
+    const idx = Math.round((r+1)/2*511);
+    const c = "rgb(" + lut[idx*3] + "," + lut[idx*3+1] + "," + lut[idx*3+2] + ")";
+    const lum = (lut[idx*3]*0.299 + lut[idx*3+1]*0.587 + lut[idx*3+2]*0.114);
+    return 'style="background:' + c + ';color:' + (lum > 140 ? "#16191C" : "#fff") + '"';
+  };
+  let html = "<table><tr><th></th>" +
+    real.map(m => "<th>" + ATTR_META[m.key].s + "</th>").join("") + "</tr>";
+  for (let i=0;i<n;i++){
+    html += '<tr><th class="rowlab">' + ATTR_META[real[i].key].s + "</th>";
+    for (let j=0;j<n;j++){
+      const r = R[i][j];
+      html += "<td " + cell(r) + ' class="' + (Math.abs(r) > 0.8 && i !== j ? "hi" : "") +
+              '">' + (i===j ? "1" : r.toFixed(2)) + "</td>";
+    }
+    html += "</tr>";
+  }
+  $("corrBox").innerHTML = html + "</table>";
+  const pairs = [];
+  for (let i=0;i<n;i++) for (let j=i+1;j<n;j++)
+    if (Math.abs(R[i][j]) > 0.8)
+      pairs.push(ATTR_META[real[i].key].s + " and " + ATTR_META[real[j].key].s +
+                 " (" + R[i][j].toFixed(2) + ")");
+  const tail = " Correlation is computed on the signed values, so a signed attribute " +
+    "and a magnitude can read near zero while their magnitudes track each other.";
+  $("corrNote").textContent = (pairs.length
+    ? "Correlated above 0.8: " + pairs.join(", ") +
+      ". A pair this close is one measurement written twice and counts as a single " +
+      "dimension in anything computed from the set."
+    : "No pair exceeds 0.8.") + tail;
+}
+
+renderMultiList();
+setMultiSelection(MULTI_SIX);
+$("btnMultiSix").addEventListener("click", () => setMultiSelection(MULTI_SIX));
+$("btnMultiNone").addEventListener("click", () => setMultiSelection([]));
+$("btnMultiRun").addEventListener("click", () => {
+  const b = $("btnMultiRun"), t = b.textContent;
+  b.textContent = "Computing\u2026"; b.disabled = true;
+  setTimeout(() => { try { runMulti(); } finally { b.textContent = t; b.disabled = false; } }, 10);
+});
+$("multiH").addEventListener("input", () => { $("v-mh").textContent = $("multiH").value; drawMulti(); });
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-drop]");
+  if (!b) return;
+  MULTI = MULTI.filter(m => m.key !== b.dataset.drop);
+  const box = $("multiList").querySelector('input[value="' + b.dataset.drop + '"]');
+  if (box) box.checked = false;
+  drawMulti(); drawCorrelation();
+});
 
 /* ---- reference buttons ---- */
 document.addEventListener("click", e => {

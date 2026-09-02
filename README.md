@@ -231,6 +231,30 @@ rather than how much there is, which separates intervals that look alike on
 amplitude. On narrow-bandwidth legacy data the bands are placed around the
 chosen centre frequency rather than across the whole spectrum.
 
+## Comparing several attributes
+
+Open "Compare several at once" in the Attributes tab, tick what you want, and
+press Compute. Any selection is drawn on a shared time axis, and each panel can
+be dismissed from its own header. The analytic trace and structure tensor are
+computed once for the whole set, so eight attributes on a 500,000-sample crop
+take under a second.
+
+Below the panels is a Pearson correlation matrix for the displayed set. It
+answers the question the panels cannot: whether these are different
+measurements. On COCORP Wyoming Line 1, envelope correlates 0.98 with RMS
+amplitude, 0.97 with sweetness and 0.91 with Teager-Kaiser energy. Those four
+give four panels and one dimension. Coherence and linearity correlate 0.78,
+both coming from the structure tensor.
+
+The default selection -- envelope, cosine of phase, average frequency, average
+bandwidth, apparent dip and in-line coherence -- was chosen from those measured
+values so that no pair exceeds 0.5.
+
+Two limits on reading the matrix. Correlation is computed on signed values, so a
+signed attribute and a magnitude can read near zero while their magnitudes track
+each other. And Pearson correlation sees linear association only; two attributes
+related through a curve can read low and still carry the same information.
+
 ## Learn more
 
 Every filter group and the attribute picker carry a "Learn more" button, and
