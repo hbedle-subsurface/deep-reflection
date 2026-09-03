@@ -301,7 +301,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.10</span>
+  <span class="ver" title="build date">v2026.09.11</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -324,8 +324,9 @@ details pre{
       <div class="row">
         <button class="primary" id="btnOpen">Choose SEG-Y</button>
       </div>
-      <p>or drop a .sgy / .segy file here</p>
-      <input type="file" id="fileInput" accept=".sgy,.segy,.SGY,.SEGY" hidden>
+      <p>or drop a file here. Any extension: legacy archives use .sgy, .segy,
+        .bin, .sgd and no extension at all.</p>
+      <input type="file" id="fileInput" hidden>
     </div>
     <div id="samples"></div>
     <div class="meta" id="meta" hidden>
@@ -2418,8 +2419,13 @@ function handleFile(file){
   const rd = new FileReader();
   rd.onload = () => {
     try { load(parseSegy(rd.result), file.name, file.size); showSampleInfo(null); }
-    catch (err){ $("placeholder").hidden = false; $("panels").hidden = true;
-      $("placeholder").textContent = "Could not read this file. " + err.message; }
+    catch (err){
+      $("placeholder").hidden = false; $("panels").hidden = true;
+      $("placeholder").textContent =
+        "Could not read " + file.name + ". " + err.message +
+        "  If the header is unusual, the sample count, format code and byte order " +
+        "can be wrong without the file being damaged.";
+    }
   };
   rd.onerror = () => { $("placeholder").textContent = "The file could not be read from disk."; };
   rd.readAsArrayBuffer(file);
