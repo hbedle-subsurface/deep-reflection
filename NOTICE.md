@@ -45,7 +45,7 @@ Figures from:
 
 > **Permission status: not yet obtained.** The captions in the tool carry
 > "Reproduced pending permission". Replace that wording with "Reproduced with
-> permission from Elsevier" and the RightsLink licence number once granted. If
+> permission from Elsevier" and the RightsLink license number once granted. If
 > permission is refused, delete the two files: the tool hides missing figures
 > automatically and everything else continues to work.
 
