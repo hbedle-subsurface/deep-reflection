@@ -251,9 +251,10 @@ button.primary:hover{background:#6d1213;border-color:#6d1213}
 .srow select{padding:.2rem;font:inherit;font-size:.76rem;border:1px solid var(--rule);
   border-radius:2px;background:var(--paper)}
 .srow button{font-size:.74rem;padding:.25rem .5rem;align-self:center}
-.mcard .mscale{cursor:pointer}
-.mcard .mscale:hover{background:var(--fill)}
-.cbar{cursor:pointer}
+.mcard .mscale[data-style]{cursor:pointer}
+.mcard .mscale[data-style]:hover{background:var(--fill)}
+.mcard .mscale[data-style] .cbstrip:hover{border-color:var(--red)}
+.mcard .mscale .fixed{font-family:var(--ui);font-size:.64rem;font-style:italic}
 
 /* ---------- multi-attribute grid ---------- */
 #multiPanel{margin-bottom:1.2rem}
@@ -323,7 +324,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.17</span>
+  <span class="ver" title="build date">v2026.09.18</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -2262,7 +2263,8 @@ function redraw(){
   if (ATTR){
     $("attrPanel").hidden = false;
     $("attrTitle").textContent = ATTR.title;
-    $("attrNote").textContent = ATTR.unit;
+    $("attrNote").textContent = ATTR.unit +
+      (ATTR.rgb ? "" : "  \u2014  click the colour bar to adjust the scale");
     if (ATTR.rgb) drawRGB($("cAt"), ATTR.rgb, ATTR.scales, nx, ns);
     else { const st = styleFor(ATTR);
       drawRange($("cAt"), ATTR.a, nx, ns, st.lo, st.hi, lutFor(ATTR)); }
@@ -2742,14 +2744,18 @@ function scaleRow(m, i){
       '<span class="swatch" style="background:' + c[k] + '"></span><span>' +
       f.toFixed(0) + " Hz</span>").join("") + "</div>";
   }
-  const st = m.legend === "ampbar" ? {lo:-m.ampClip, hi:m.ampClip} : styleFor(m);
+  const amp = m.legend === "ampbar";
+  const st = amp ? {lo:-m.ampClip, hi:m.ampClip} : styleFor(m);
   const step = (st.hi - st.lo)/4;
+  const tail = amp
+    ? '<span class="fixed">set in Display</span>'
+    : lab;
   return '<div class="mscale"' +
-    (m.legend === "ampbar" ? "" :
-     ' data-style="' + m.key + '" title="Click to adjust the colour scale"') +
+    (amp ? ' title="Coloured by the section colour and clip in the Display tab"'
+         : ' data-style="' + m.key + '" title="Click to adjust the colour scale"') +
     "><span>" + fmtTick(st.lo, step) + "</span>" +
     '<canvas class="cbstrip" id="cb' + i + '"></canvas>' +
-    "<span>" + fmtTick(st.hi, step) + "</span>" + lab + "</div>";
+    "<span>" + fmtTick(st.hi, step) + "</span>" + tail + "</div>";
 }
 
 function drawMulti(){
@@ -3203,7 +3209,10 @@ function applyStyle(fromPct){
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-style]");
   if (t){ openStyle(t.dataset.style); return; }
-  if (e.target.id === "bf3" && ATTR && !ATTR.rgb) openStyle(ATTR.key);
+  // The colour bar canvas sits inside a padded column; requiring the click to
+  // land exactly on the canvas made it feel dead.
+  const cb = e.target.closest ? e.target.closest(".cbar") : null;
+  if (cb && ATTR && !ATTR.rgb && !$("attrPanel").hidden) openStyle(ATTR.key);
 });
 for (const id of ["styleCmap","styleInv","styleLo","styleHi"])
   $(id).addEventListener("change", () => applyStyle(false));
