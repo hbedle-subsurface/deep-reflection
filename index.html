@@ -274,8 +274,12 @@ button.primary:hover{background:#6d1213;border-color:#6d1213}
 .mcard .mbody{display:grid;grid-template-columns:46px 1fr}
 .mcard .mbody canvas{display:block;width:100%;height:100%}
 .mcard .mplot{border-left:1px solid var(--rule);overflow:hidden;position:relative}
-.mcard .mscale{display:flex;justify-content:space-between;font-family:var(--num);
-  font-size:.66rem;color:var(--slate);padding:.15rem .45rem;border-top:1px solid var(--rule)}
+.mcard .mscale{display:flex;align-items:center;gap:.4rem;font-family:var(--num);
+  font-size:.66rem;color:var(--slate);padding:.2rem .45rem;border-top:1px solid var(--rule)}
+.mcard .mscale .cbstrip{flex:1;min-width:40px;height:10px;display:block;
+  border:1px solid var(--rule)}
+.mcard .mscale .cblab{font-family:var(--ui);font-size:.66rem;white-space:nowrap}
+.mcard .mscale .swatch{width:11px;height:11px;display:inline-block;border:1px solid var(--rule)}
 .corrTitle{font-size:.82rem;font-weight:600;margin:1.1rem 0 .5rem}
 #corrBox table{border-collapse:collapse;font-family:var(--num);font-size:.7rem}
 #corrBox th{font-weight:500;color:var(--slate);padding:.15rem .3rem;font-size:.68rem}
@@ -319,7 +323,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.16</span>
+  <span class="ver" title="build date">v2026.09.17</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -2162,14 +2166,17 @@ function computeOne(key, p, C){
       const sh = attrRelief(KEPT, nx, ns, p.relAz, p.relAlt, p.relZ, p.relSm);
       const ch = attrReliefRGB(KEPT, sh, nx, ns, p.cmap);
       return {key, rgb:ch, scales:[255,255,255], title:ATTR_META.reliefrgb.n,
-              cbLabel:"", unit:"amplitude colour shaded from " + p.relAz +
-              "\u00b0, relief \u00d7" + p.relZ.toFixed(1)}; }
+              cbLabel:"amplitude", legend:"ampbar",
+              ampLut:p.cmap, ampClip:(percentileAbs(KEPT, 98) || 1e-30),
+              unit:"amplitude colour shaded from " + p.relAz +
+              "\u00b0, relief \u00d7" + p.relZ.toFixed(2)}; }
     case "rgb": {
       const fLo = Math.max(2, p.attrFc/1.8), fHi = Math.min(0.48/dts, p.attrFc*1.8);
       const R = attrSpectralBand(KEPT, nx, ns, dts, fLo, 3.0);
       const G = attrSpectralBand(KEPT, nx, ns, dts, p.attrFc, 3.0);
       const B = attrSpectralBand(KEPT, nx, ns, dts, fHi, 3.0);
-      return {key, rgb:[R,G,B],
+      return {key, rgb:[R,G,B], legend:"bands",
+              bands:[fLo, p.attrFc, fHi],
               scales:[percentile(R,99), percentile(G,99), percentile(B,99)],
               title:ATTR_META.rgb.n, cbLabel:"",
               unit:"red " + fLo.toFixed(0) + " Hz, green " + p.attrFc.toFixed(0) +
@@ -2723,6 +2730,28 @@ function runMulti(){
   drawCorrelation();
 }
 
+/* The strip under each card. Non-RGB attributes get a real colour bar with
+   their end values and are clickable to adjust; the three-band blend gets one
+   swatch per band; relief over amplitude gets the amplitude bar it is actually
+   coloured by, rather than the band labels it used to borrow. */
+function scaleRow(m, i){
+  const lab = m.cbLabel ? '<span class="cblab">' + m.cbLabel + "</span>" : "";
+  if (m.legend === "bands"){
+    const c = ["#d94a3d", "#4aa04a", "#3d6ad9"];
+    return '<div class="mscale">' + m.bands.map((f, k) =>
+      '<span class="swatch" style="background:' + c[k] + '"></span><span>' +
+      f.toFixed(0) + " Hz</span>").join("") + "</div>";
+  }
+  const st = m.legend === "ampbar" ? {lo:-m.ampClip, hi:m.ampClip} : styleFor(m);
+  const step = (st.hi - st.lo)/4;
+  return '<div class="mscale"' +
+    (m.legend === "ampbar" ? "" :
+     ' data-style="' + m.key + '" title="Click to adjust the colour scale"') +
+    "><span>" + fmtTick(st.lo, step) + "</span>" +
+    '<canvas class="cbstrip" id="cb' + i + '"></canvas>' +
+    "<span>" + fmtTick(st.hi, step) + "</span>" + lab + "</div>";
+}
+
 function drawMulti(){
   const grid = $("multiGrid");
   if (!MULTI.length){ $("multiPanel").hidden = true; grid.innerHTML = ""; return; }
@@ -2737,11 +2766,7 @@ function drawMulti(){
     '<div class="mbody" style="height:' + h + 'px">' +
     '<canvas class="axis" id="my' + i + '"></canvas>' +
     '<div class="mplot"><canvas id="mc' + i + '"></canvas></div></div>' +
-    '<div class="mscale"' + (m.rgb ? "" : ' data-style="' + m.key + '" title="Click to adjust the colour scale"') +
-    '><span>' + (m.rgb ? "low band" : fmtTick(styleFor(m).lo, (styleFor(m).hi-styleFor(m).lo)/4)) +
-    "</span><span>" + (m.cbLabel || "") + "</span><span>" +
-    (m.rgb ? "high band" : fmtTick(styleFor(m).hi, (styleFor(m).hi-styleFor(m).lo)/4)) +
-    "</span></div></div>").join("");
+    scaleRow(m, i) + "</div>").join("");
 
   const {nx, ns, dt} = SEG;
   const j0 = SEG.j0 || 0;
@@ -2754,8 +2779,29 @@ function drawMulti(){
       drawRange($("mc"+i), m.a, nx, ns, st.lo, st.hi, lutFor(m)); }
   });
   requestAnimationFrame(() => {
-    MULTI.forEach((m, i) =>
-      drawYAxis("my"+i, t0, t1, useSec ? "s" : "ms", useSec ? 1 : 1e-3, 0));
+    MULTI.forEach((m, i) => {
+      drawYAxis("my"+i, t0, t1, useSec ? "s" : "ms", useSec ? 1 : 1e-3, 0);
+      if (m.legend === "bands") return;
+      const cv = $("cb"+i);
+      if (!cv) return;
+      const r = cv.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const W = Math.max(8, Math.round(r.width*dpr)), H = Math.max(6, Math.round(r.height*dpr));
+      cv.width = W; cv.height = H;
+      const g = cv.getContext("2d");
+      const lut = m.legend === "ampbar" ? buildLUT(m.ampLut || "bwr") : lutFor(m);
+      const img = g.createImageData(W, 1);
+      for (let x=0;x<W;x++){
+        const idx = Math.round(x/(W-1)*511);
+        img.data[x*4]=lut[idx*3]; img.data[x*4+1]=lut[idx*3+1];
+        img.data[x*4+2]=lut[idx*3+2]; img.data[x*4+3]=255;
+      }
+      const tmp = document.createElement("canvas");
+      tmp.width = W; tmp.height = 1;
+      tmp.getContext("2d").putImageData(img, 0, 0);
+      g.imageSmoothingEnabled = false;
+      g.drawImage(tmp, 0, 0, W, H);
+    });
   });
 }
 
