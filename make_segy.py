@@ -57,6 +57,20 @@ for ix in x:
         if 0 <= si < NS:
             refl[ix, si] += 0.9 * w
 
+# a tuning wedge: two interfaces converging, so bed thickness sweeps from well
+# above tuning down to zero. At 28 Hz and 2 ms, tuning thickness is about
+# 9 ms, or 4.5 samples, so the wedge crosses it near trace 355.
+for ix in x:
+    if 250 < ix < 420:
+        top = 430 + 0.026 * ix + 3.0e-4 * (ix - 240) ** 2 + throw(ix, 430)
+        thick = 34.0 * (1.0 - (ix - 250) / 165.0)
+        ti = int(round(top))
+        if 0 <= ti < NS:
+            refl[ix, ti] += 0.75
+        bi = int(round(top + thick))
+        if thick > 0.5 and 0 <= bi < NS:
+            refl[ix, bi] -= 0.75
+
 # a dim, subtle amplitude anomaly (flat spot-ish) - the thing a detail boost should reveal
 for ix in x:
     if 330 < ix < 415:
@@ -114,6 +128,7 @@ txt = [
  "C 4",
  "C 5 480 TRACES   900 SAMPLES   SAMPLE INTERVAL 2 MS   FORMAT 1 (IBM FLOAT)",
  "C 6 CONTENT: 13 DIPPING HORIZONS, NORMAL FAULT AT CDP 300 (GROWING THROW),",
+ "C 6A A TUNING WEDGE FROM CDP 1250 TO 1420 THINNING TO ZERO,",
  "C 7 A LOW-RELIEF CHANNEL NEAR CDP 160, A DIM AMPLITUDE ANOMALY NEAR CDP 372,",
  "C 8 SPHERICAL DIVERGENCE LOSS, RANDOM NOISE, AND 3 STEEP COHERENT NOISE TRAINS.",
  "C 9",

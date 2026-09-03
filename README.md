@@ -254,6 +254,48 @@ signed attribute and a magnitude can read near zero while their magnitudes track
 each other. And Pearson correlation sees linear association only; two attributes
 related through a curve can read low and still carry the same information.
 
+## Relief shading
+
+Two entries in the attribute list, "Relief shading" and "Relief over
+amplitude", treat the section as a surface whose height is the amplitude and
+shine a directional light across it. The image is the Lambertian response of
+that surface rather than a colour lookup on the amplitude. This is analytical
+hillshading, the standard method for rendering terrain, applied to seismic;
+Lynch has applied it to seismic under the name High Visual Resolution
+Interpretation. It runs on the full 783 by 2501 line in 361 ms.
+
+Amplitude is normalised by its 98th percentile before the surface is built, so
+the relief control behaves the same whatever the data are scaled to: multiplying
+a section by 10^6 changes the shading by one part in 10^6. A flat area returns
+exactly the sine of the light elevation.
+
+Azimuth matters more than anything else. Amplitude ridges run along bedding, so
+lighting across bedding renders the layering while lighting along it renders
+lateral breaks and leaves the layering flat. Surface smoothing matters too: a
+raw section oscillates at the wavelet period, and with no smoothing the shading
+renders that corrugation rather than the structure.
+
+**What it responds to** is lateral change in the shape of the amplitude
+surface: ridge height follows amplitude, ridge width and spacing follow bed
+thickness and tuning, ridge tilt follows dip, and a ridge ends at a
+termination. On a synthetic containing a tuning wedge, a gradual brightening
+and a fault, the lateral swing through each feature in units of the display's
+own spread was 6.8 times larger on the shaded image than on the amplitude for
+the wedge, 2.4 for the brightening and 15.5 for the fault, with lateral detail
+through the wedge 20 times stronger. The synthetic sample line carries a tuning
+wedge from CDP 1250 to 1420 for this reason.
+
+**Where it does not work.** The method needs a well-behaved surface more than
+any particular feature. On COCORP Wyoming Line 1, at 14 Hz and an 8 ms sample
+interval, a wavelet cycle spans under nine samples, the gradient down the trace
+is about 2.7 times the gradient along a reflector, and the shading renders a
+herringbone of the wavelet rather than structure. Resampling to a display grid
+does not fix it; on that line the plain amplitude display is more readable.
+
+The shading adds no information the amplitude did not already carry, so nothing
+seen in it is evidence on its own. Confirm a feature against the amplitude or an
+attribute before interpreting it.
+
 ## Clustering
 
 "Cluster with a self-organizing map" in the Attributes tab fits a grid of nodes
