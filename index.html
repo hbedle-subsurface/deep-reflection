@@ -301,7 +301,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.12</span>
+  <span class="ver" title="build date">v2026.09.14</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -534,6 +534,7 @@ details pre{
       <label>Velocity, km/s<input type="number" id="vkms" min="1" step="0.1" value="6"></label>
     </div>
     <p class="hint" id="veNote"></p>
+    <p class="hint" id="aliasNote" hidden style="color:var(--red)"></p>
 
     <details style="margin-top:.8rem">
       <summary>More</summary>
@@ -1462,7 +1463,9 @@ function buildALUT(name){
   }
   return lut;
 }
-function drawRGB(canvas, ch, sc, nx, nz){
+function drawRGB(canvas, ch, sc, nx, nz0){
+  const nz = Math.min(nz0, DISPLAY_H > 0 ? DISPLAY_H : nz0);
+  ch = ch.map(c => reduceTime(c, nx, nz0, nz, "mean").a);
   canvas.width = nx; canvas.height = nz;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(nx, nz), px = img.data;
@@ -1477,7 +1480,9 @@ function drawRGB(canvas, ch, sc, nx, nz){
   }
   ctx.putImageData(img,0,0);
 }
-function drawRange(canvas, a, nx, nz, vmin, vmax, lut){
+function drawRange(canvas, a, nx, nz0, vmin, vmax, lut){
+  const R = reduceTime(a, nx, nz0, DISPLAY_H, "mean");
+  a = R.a; const nz = R.nz;
   canvas.width = nx; canvas.height = nz;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(nx, nz), px = img.data;
@@ -1490,6 +1495,41 @@ function drawRange(canvas, a, nx, nz, vmin, vmax, lut){
   }
   ctx.putImageData(img,0,0);
 }
+
+/* Reduce the time axis to the number of pixels actually available before the
+   image is built. Drawing a 3000-sample canvas into a 260-pixel panel leaves
+   the browser to resample it, and bilinear sampling is an interpolator, not an
+   anti-aliasing filter: it produces moire between the wavelet and the pixel
+   grid rather than suppressing it.
+
+   Signed sections keep the sample of largest magnitude in each bin, which is
+   what a conventional seismic display does and preserves the character of the
+   wiggle. Attributes and shaded images are averaged, which is correct
+   anti-aliasing for a luminance image. */
+function reduceTime(a, nx, nz, H, mode){
+  if (!(H > 0) || H >= nz) return {a, nz};
+  const out = new Float32Array(nx*H);
+  for (let i=0;i<nx;i++){
+    const src = i*nz, dst = i*H;
+    for (let j=0;j<H;j++){
+      const j0 = (j*nz/H)|0;
+      const j1 = Math.max(j0+1, ((j+1)*nz/H)|0);
+      if (mode === "peak"){
+        let bv = -1, bk = j0;
+        for (let k=j0;k<j1;k++){ const v = a[src+k] < 0 ? -a[src+k] : a[src+k];
+          if (v > bv){ bv = v; bk = k; } }
+        out[dst+j] = a[src+bk];
+      } else {
+        let acc = 0;
+        for (let k=j0;k<j1;k++) acc += a[src+k];
+        out[dst+j] = acc/(j1-j0);
+      }
+    }
+  }
+  return {a: out, nz: H};
+}
+let DISPLAY_H = 0;      // pixels available down a panel, set in redraw
+
 function percentile(d, p){
   const stride = Math.max(1, Math.floor(d.length/200000));
   const s = [];
@@ -1507,7 +1547,9 @@ function percentileAbs(d, p){
   s.sort((a,b)=>a-b);
   return s[Math.min(s.length-1, Math.floor(s.length*p/100))] || 1e-9;
 }
-function draw(canvas, d, nx, nz, clipVal, lut){
+function draw(canvas, d, nx, nz0, clipVal, lut){
+  const R = reduceTime(d, nx, nz0, DISPLAY_H, "peak");
+  d = R.a; const nz = R.nz;
   canvas.width = nx; canvas.height = nz;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(nx, nz);
@@ -2135,6 +2177,21 @@ function redraw(){
   draw($("cRe"), drmD, nx, ns, clip / p.dgain, lut);
 
   sizePanels(p.ph);
+  // device pixels available down a panel; the canvas is built at this height
+  DISPLAY_H = Math.max(60, Math.round(p.ph * (window.devicePixelRatio || 1)));
+  // Two samples per pixel is the most a panel can carry. Beyond that the
+  // wavelet beats against the pixel grid and the display shows moire rather
+  // than data; no resampling recovers it, because the room is not there.
+  const perPx = ns / DISPLAY_H;
+  const note = $("aliasNote");
+  if (perPx > 2){
+    const fits = Math.round(2 * DISPLAY_H * dt * 1e-6 * 10) / 10;
+    note.hidden = false;
+    note.textContent = ns + " samples shown in " + DISPLAY_H + " pixels, " +
+      perPx.toFixed(1) + " per pixel. This panel can carry about " + fits +
+      " s without the wavelet beating against the pixel grid. Crop in time, or " +
+      "raise the panel height.";
+  } else note.hidden = true;
 
   if (ATTR){
     $("attrPanel").hidden = false;
