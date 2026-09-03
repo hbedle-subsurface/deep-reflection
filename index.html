@@ -249,11 +249,16 @@ button.primary:hover{background:#6d1213;border-color:#6d1213}
 }
 
 /* ---------- color editor ---------- */
-#styleBox{border:1px solid var(--rule);background:var(--fill);padding:.45rem .6rem;
-  margin-bottom:.6rem;border-radius:2px}
+#styleBox{
+  position:sticky;top:0;z-index:9;
+  border:1px solid var(--rule);border-left:3px solid var(--teal);
+  background:var(--paper);padding:.45rem .6rem;margin-bottom:.6rem;border-radius:2px;
+  box-shadow:0 2px 8px rgba(22,25,28,.12);
+}
 .srow{display:flex;align-items:flex-end;gap:.7rem;flex-wrap:wrap;font-size:.76rem;
   color:var(--slate)}
-.srow > b{font-size:.82rem;color:var(--ink);align-self:center}
+.srow > b{font-size:.82rem;color:var(--teal);align-self:center;
+  font-family:var(--display);font-weight:700}
 .srow label{display:flex;flex-direction:column;gap:.1rem}
 .srow label.chk{flex-direction:row;align-items:center;gap:.3rem;align-self:center}
 .srow input[type=number]{width:88px;padding:.2rem .25rem;font:inherit;font-size:.76rem;
@@ -337,7 +342,7 @@ details pre{
 <header>
   <h1>Deep Reflection</h1>
   <span class="sub">filters, attributes, and what each one leaves out</span>
-  <span class="ver" title="build date">v2026.09.20</span>
+  <span class="ver" title="build date">v2026.09.21</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -3220,7 +3225,11 @@ function openStyle(key){
   $("styleHi").value = Number(st.hi.toPrecision(4));
   $("stylePct").value = (ATTR_STYLE[key] && ATTR_STYLE[key].pct) || 99;
   $("v-stylePct").textContent = $("stylePct").value;
-  $("styleBox").hidden = false;
+  const box = $("styleBox");
+  box.hidden = false;
+  // sticky keeps it visible once passed, but not if the page sits above it
+  if (box.getBoundingClientRect && box.getBoundingClientRect().bottom < 0)
+    box.scrollIntoView({block:"nearest"});
 }
 function closeStyle(){ STYLING = null; $("styleBox").hidden = true; }
 
