@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'"
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
-<title>Kept and Removed — seismic image filters</title>
+<title>Deep Reflection — a workbench for 2D seismic lines</title>
 <style>
 :root{
   --ink:#16191C;
@@ -335,9 +335,9 @@ details pre{
 <body>
 
 <header>
-  <h1>Kept and Removed</h1>
-  <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.19</span>
+  <h1>Deep Reflection</h1>
+  <span class="sub">filters, attributes, and what each one leaves out</span>
+  <span class="ver" title="build date">v2026.09.20</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -593,6 +593,30 @@ details pre{
 </aside>
 
 <main class="stage">
+      <div id="styleBox" hidden>
+    <div class="srow">
+      <b id="styleName"></b>
+      <label>Color
+        <select id="styleCmap">
+          <option value="magma">Magma</option>
+          <option value="viridis">Viridis</option>
+          <option value="cividis">Cividis</option>
+          <option value="batlow">Batlow</option>
+          <option value="gray">Gray</option>
+          <option value="coolwarm">Blue–white–red</option>
+          <option value="vik">Vik</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="styleInv">Invert</label>
+      <label>Clip <b><span id="v-stylePct">99</span>%</b>
+        <input type="range" id="stylePct" min="80" max="100" step="0.5" value="99">
+      </label>
+      <label>Min<input type="number" id="styleLo" step="any"></label>
+      <label>Max<input type="number" id="styleHi" step="any"></label>
+      <button id="styleReset">Reset</button>
+      <button id="styleClose">Close</button>
+    </div>
+  </div>
   <div id="panels" hidden>
     <div class="panel">
       <div class="cap"><h3>Input</h3><span class="note">as read from the file<span id="decNote"></span></span></div>
@@ -617,30 +641,6 @@ details pre{
       <div class="cap measured">
         <h3>Attribute comparison</h3><button class="help" data-help="color" style="margin-left:.3rem">Learn more</button>
         <span class="note" id="multiCap"></span>
-      </div>
-      <div id="styleBox" hidden>
-        <div class="srow">
-          <b id="styleName"></b>
-          <label>Color
-            <select id="styleCmap">
-              <option value="magma">Magma</option>
-              <option value="viridis">Viridis</option>
-              <option value="cividis">Cividis</option>
-              <option value="batlow">Batlow</option>
-              <option value="gray">Gray</option>
-              <option value="coolwarm">Blue–white–red</option>
-              <option value="vik">Vik</option>
-            </select>
-          </label>
-          <label class="chk"><input type="checkbox" id="styleInv">Invert</label>
-          <label>Clip <b><span id="v-stylePct">99</span>%</b>
-            <input type="range" id="stylePct" min="80" max="100" step="0.5" value="99">
-          </label>
-          <label>Min<input type="number" id="styleLo" step="any"></label>
-          <label>Max<input type="number" id="styleHi" step="any"></label>
-          <button id="styleReset">Reset</button>
-          <button id="styleClose">Close</button>
-        </div>
       </div>
       <div id="multiGrid"></div>
       <div id="corrWrap" hidden>
@@ -1613,19 +1613,18 @@ function percentileAbs(d, p){
   s.sort((a,b)=>a-b);
   return s[Math.min(s.length-1, Math.floor(s.length*p/100))] || 1e-9;
 }
-function draw(canvas, d, nx, nz0, clipVal, lut){
+function draw(canvas, d, nx, nz0, lo, hi, lut){
   const R = reduceTime(d, nx, nz0, DISPLAY_H, "peak");
   d = R.a; const nz = R.nz;
   canvas.width = nx; canvas.height = nz;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(nx, nz);
   const px = img.data;
-  const inv = 1/(clipVal || 1e-9);
+  const sc = 511/((hi - lo) || 1e-30);
   for (let i=0;i<nx;i++){
     for (let j=0;j<nz;j++){
-      let t = d[i*nz+j]*inv;
-      if (t > 1) t = 1; else if (t < -1) t = -1;
-      const idx = ((t+1)*255.5)|0;
+      const t = (d[i*nz+j] - lo)*sc;
+      const idx = t < 0 ? 0 : (t > 511 ? 511 : t|0);
       const o = (j*nx+i)*4;
       px[o]=lut[idx*3]; px[o+1]=lut[idx*3+1]; px[o+2]=lut[idx*3+2]; px[o+3]=255;
     }
@@ -1874,7 +1873,7 @@ function helpDocument(){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'"
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
-<title>Kept and Removed \u2014 reference</title>
+<title>Deep Reflection \u2014 reference</title>
 <style>
 :root{--ink:#16191C;--slate:#5C6670;--rule:#C9CDD2;--fill:#F4F6F7;--red:#841617}
 *{box-sizing:border-box}
@@ -1904,7 +1903,7 @@ b{font-weight:600}
 @keyframes flash{from{background:#fdf2f2}to{background:transparent}}
 @media (prefers-reduced-motion:reduce){:target{animation:none}}
 </style></head><body id="top">
-<header><h1>Kept and Removed \u2014 reference</h1>
+<header><h1>Deep Reflection \u2014 reference</h1>
 <p>What each control and attribute does, and how to read the result.</p></header>
 <nav>${nav}</nav><main>${body}</main></body></html>`;
 }
@@ -2255,10 +2254,14 @@ function redraw(){
     din = apply(din); dke = apply(dke); drmD = apply(drm);
   }
 
-  const clip = percentileAbs(din, p.clip) / p.gain;
-  draw($("cIn"), din, nx, ns, clip, lut);
-  draw($("cKe"), dke, nx, ns, clip, lut);
-  draw($("cRe"), drmD, nx, ns, clip / p.dgain, lut);
+  const auto = percentileAbs(din, p.clip)/p.gain || 1e-30;
+  const sst = ATTR_STYLE[SECTION] || {};
+  const clip = (sst.hi !== undefined) ? sst.hi : auto;
+  const slo  = (sst.lo !== undefined) ? sst.lo : -auto;
+  const slut = sectionLUT(sst, p);
+  draw($("cIn"), din, nx, ns, slo, clip, slut);
+  draw($("cKe"), dke, nx, ns, slo, clip, slut);
+  draw($("cRe"), drmD, nx, ns, slo/p.dgain, clip/p.dgain, slut);
 
   sizePanels(p.ph);
   // device pixels available down a panel; the canvas is built at this height
@@ -2345,14 +2348,16 @@ function drawAllAxes(clip, lut, p){
 
   const secPerUnit = useSec ? 1 : 1e-3;
   const vk = p.vkms > 0 ? p.vkms : 0;
-  const panels = [["f0", clip, lut, "amplitude"],
-                  ["f1", clip, lut, "amplitude"],
-                  ["f2", clip / p.dgain, lut, "amplitude"]];
-  for (const [id, c, L, cl] of panels){
+  const sst2 = ATTR_STYLE[SECTION] || {};
+  const shi = (sst2.hi !== undefined) ? sst2.hi : clip;
+  const slo2 = (sst2.lo !== undefined) ? sst2.lo : -clip;
+  const sl2 = sectionLUT(sst2, p);
+  for (const [id, a1, b1] of [["f0", slo2, shi], ["f1", slo2, shi],
+                              ["f2", slo2/p.dgain, shi/p.dgain]]){
     if ($("p" + id).offsetHeight < 5) continue;
     drawYAxis("y" + id, t0, t1, tunit, secPerUnit, vk);
     drawXAxis("x" + id, xa, xb, xlab);
-    drawColorbar("b" + id, -c, c, L, cl);
+    drawColorbar("b" + id, a1, b1, sl2, "amplitude");
   }
   if (ATTR && !$("attrPanel").hidden){
     drawYAxis("yf3", t0, t1, tunit, secPerUnit, vk);
@@ -2606,8 +2611,8 @@ $("btnSegy").addEventListener("click", () => {
   if (p.detOn) bits.push("DETAIL BOOST BASE SIGMA " + p.detR.toFixed(1) + ", GAIN " + p.detG.toFixed(1));
   if (!bits.length) bits.push("NO FILTERS APPLIED");
   const startMs = Math.round(CROP.j0 * SEG.dt * 1e-3);
-  const lines = ["C 1 PROCESSED WITH KEPT AND REMOVED (SEISMIC-IMAGE-FILTERS)",
-                 "C 2 HBEDLE-SUBSURFACE.GITHUB.IO/SEISMIC-IMAGE-FILTERS",
+  const lines = ["C 1 PROCESSED WITH DEEP REFLECTION",
+                 "C 2 HBEDLE-SUBSURFACE.GITHUB.IO/DEEP-REFLECTION",
                  "C 3 OUTPUT IS THE KEPT PANEL. AMPLITUDES AS FILTERED, NO AGC OR CLIP APPLIED.",
                  "C 4 TRACES " + SEG.nx + "  SAMPLES " + SEG.ns + "  INTERVAL " + (SEG.dt/1000).toFixed(3) + " MS",
                  "C 5 START TIME " + startMs + " MS  CDP " + SEG.cdp[0] + " TO " + SEG.cdp[SEG.nx-1],
@@ -2634,7 +2639,7 @@ $("btnParams").addEventListener("click", () => {
   bits.push("display: " + p.cmap + ", clip " + p.clip.toFixed(1) + " pct, gain " + p.gain.toFixed(2) +
     "x" + (p.ampMode === "agc" ? ", AGC " + p.agcWin + " ms"
          : p.ampMode === "tpow" ? ", time gain t^" + p.tpow.toFixed(1) : ""));
-  const txt = "Kept and Removed — " + bits.join(" | ");
+  const txt = "Deep Reflection — " + bits.join(" | ");
   $("paramOut").textContent = txt;
   if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{});
 });
@@ -3154,6 +3159,7 @@ for (const [id, wn] of [["btnSom", false], ["btnSomNull", true]])
    adjustable without recomputing anything: only the mapping from value to
    color changes, and that is a redraw. */
 const ATTR_STYLE = {};          // key -> {cmap, lo, hi, pct, inv}
+const SECTION = "__section";    // input, kept and removed, scaled together
 let STYLING = null;             // key currently open in the editor
 
 function styleFor(m){
@@ -3165,6 +3171,13 @@ function styleFor(m){
     inv: !!st.inv
   };
 }
+function sectionLUT(st, p){
+  const l = buildLUT(st.cmap || p.cmap);
+  if (!st.inv) return l;
+  const o = new Uint8ClampedArray(l.length);
+  for (let i=0;i<512;i++) for (let c=0;c<3;c++) o[i*3+c] = l[(511-i)*3+c];
+  return o;
+}
 function lutFor(m){
   const st = styleFor(m);
   const l = buildALUT(st.cmap);
@@ -3174,6 +3187,15 @@ function lutFor(m){
   return o;
 }
 function findAttr(key){
+  if (key === SECTION){
+    if (!SEG || !KEPT) return null;
+    // The three seismic panels share one scale deliberately: comparing them is
+    // the point, and a per-panel range would make the comparison meaningless.
+    const p = readParams();
+    const c = percentileAbs(SEG.data, p.clip)/p.gain || 1e-30;
+    return {key:SECTION, a:SEG.data, vmin:-c, vmax:c, cmapDefault:p.cmap,
+            cbLabel:"amplitude", title:"Seismic panels, all three together"};
+  }
   if (ATTR && ATTR.key === key) return ATTR;
   return MULTI.find(m => m.key === key) || null;
 }
@@ -3181,7 +3203,7 @@ function findAttr(key){
    attributes stay symmetric about zero so that zero keeps its color. */
 function rangeFromPct(m, pct){
   if (!m || m.rgb) return null;
-  const signed = m.vmin < 0;
+  const signed = m.vmin < 0 || m.key === SECTION;
   if (signed){ const v = percentileAbs(m.a, pct) || 1e-30; return [-v, v]; }
   return [Math.min(0, percentile(m.a, 100-pct)), percentile(m.a, pct) || 1e-30];
 }
@@ -3229,7 +3251,9 @@ document.addEventListener("click", e => {
   // The color bar canvas sits inside a padded column; requiring the click to
   // land exactly on the canvas made it feel dead.
   const cb = e.target.closest ? e.target.closest(".cbar") : null;
-  if (cb && ATTR && !ATTR.rgb && !$("attrPanel").hidden) openStyle(ATTR.key);
+  if (!cb) return;
+  if (e.target.closest("#attrPanel")){ if (ATTR && !ATTR.rgb) openStyle(ATTR.key); }
+  else if (SEG && KEPT) openStyle(SECTION);
 });
 for (const id of ["styleCmap","styleInv","styleLo","styleHi"])
   $(id).addEventListener("change", () => applyStyle(false));

@@ -1,6 +1,6 @@
 # Deep Reflection
 
-### Watching what a filter takes out of a seismic line
+### Filters, attributes, and what each one leaves out
 
 **Open it at** https://hbedle-subsurface.github.io/deep-reflection
 
@@ -461,8 +461,8 @@ Dragging your own file onto the page needs no server at all.
 
 ## Citation
 
-Bedle, H., Kept and Removed: a browser tool for separating components of 2D
-seismic images. University of Oklahoma.
+Bedle, H., Deep Reflection: a browser workbench for 2D seismic lines.
+University of Oklahoma.
 
 ## License
 
