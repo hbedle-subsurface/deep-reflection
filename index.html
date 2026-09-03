@@ -301,7 +301,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.14</span>
+  <span class="ver" title="build date">v2026.09.15</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -454,8 +454,9 @@ details pre{
         <input type="range" id="relAlt" min="5" max="85" step="1" value="30">
       </div>
       <div class="ctl">
-        <label>Relief <b>×<span id="v-relZ">8.0</span></b></label>
-        <input type="range" id="relZ" min="0.5" max="40" step="0.5" value="8">
+        <label>Relief <b>×<span id="v-relZ">1.00</span></b></label>
+        <input type="range" id="relZ" min="0.05" max="8" step="0.05" value="1">
+        <p class="hint" id="relNote" style="margin-top:.2rem"></p>
       </div>
       <div class="ctl">
         <label>Surface smoothing <b><span id="v-relSm">1.0</span></b></label>
@@ -1007,8 +1008,13 @@ function attrReliefRGB(d, shade, nx, nz, lutName){
     let t = d[k]/clip;
     t = t > 1 ? 1 : (t < -1 ? -1 : t);
     const idx = ((t+1)*255.5)|0;
-    const sh = shade[k];
-    R[k] = lut[idx*3]*sh; G[k] = lut[idx*3+1]*sh; B[k] = lut[idx*3+2]*sh;
+    // Multiplying by the raw 0.15-1 shading crushes the colour to black. Map it
+    // to a narrower range about 1 so the shading modulates the colour instead
+    // of replacing it.
+    const sh = 0.55 + 0.75*shade[k];
+    R[k] = Math.min(255, lut[idx*3]*sh);
+    G[k] = Math.min(255, lut[idx*3+1]*sh);
+    B[k] = Math.min(255, lut[idx*3+2]*sh);
   }
   return [R, G, B];
 }
@@ -1919,7 +1925,7 @@ function syncLabels(){
   $("v-fc").textContent = p.attrFc;
   $("v-relAz").textContent = p.relAz;
   $("v-relAlt").textContent = p.relAlt;
-  $("v-relZ").textContent = p.relZ.toFixed(1);
+  $("v-relZ").textContent = p.relZ.toFixed(2);
   $("v-relSm").textContent = p.relSm.toFixed(1);
   const uses = list => (p.attrSel || []).some(k => list.includes(k));
   $("relCtl").hidden = !uses(["relief","reliefrgb"]);
@@ -2093,12 +2099,23 @@ function computeOne(key, p, C){
       a = attrAvgFreq(C.env, C.freq, nx, ns, K, true);
       vmin=0; vmax=percentile(a,98); cmap="viridis";
       unit="Hz, 2*sigma of the power-weighted frequency distribution"; break;
-    case "relief":
+    case "relief": {
       a = attrRelief(KEPT, nx, ns, p.relAz, p.relAlt, p.relZ, p.relSm);
       vmin = 0; vmax = 1; cmap = "gray";
+      // Fraction sitting on the ambient floor. Once this is more than a few
+      // percent the surface is too steep and every wavelet cycle is a cliff.
+      let dark = 0;
+      for (let k=0;k<a.length;k++) if (a[k] < 0.16) dark++;
+      const pct = 100*dark/a.length;
+      const nt = $("relNote");
+      if (nt) nt.textContent = pct.toFixed(1) + "% of the image is in full shadow. " +
+        (pct > 4 ? "Above a few percent the surface is too steep and the shading renders "
+                 + "the wavelet rather than the structure; lower the relief."
+                 : "A gently undulating surface, which is the regime this works in.");
       unit = "light from " + p.relAz + "\u00b0 at " + p.relAlt +
-             "\u00b0 elevation, relief \u00d7" + p.relZ.toFixed(1);
-      break;
+             "\u00b0, relief \u00d7" + p.relZ.toFixed(2) + ", " +
+             pct.toFixed(1) + "% in full shadow";
+      break; }
     case "reliefrgb": {
       const sh = attrRelief(KEPT, nx, ns, p.relAz, p.relAlt, p.relZ, p.relSm);
       const ch = attrReliefRGB(KEPT, sh, nx, ns, p.cmap);
