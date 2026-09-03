@@ -301,7 +301,7 @@ details pre{
 <header>
   <h1>Kept and Removed</h1>
   <span class="sub">what seismic filters do to a 2D line</span>
-  <span class="ver" title="build date">v2026.09.11</span>
+  <span class="ver" title="build date">v2026.09.12</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -1879,7 +1879,11 @@ function syncLabels(){
   $("v-relAlt").textContent = p.relAlt;
   $("v-relZ").textContent = p.relZ.toFixed(1);
   $("v-relSm").textContent = p.relSm.toFixed(1);
-  $("relCtl").hidden = !any(["relief","reliefrgb"]);
+  const uses = list => (p.attrSel || []).some(k => list.includes(k));
+  $("relCtl").hidden = !uses(["relief","reliefrgb"]);
+  $("bandCtl").hidden = !uses(["band","rgb"]);
+  $("winCtl").hidden = !uses(["rms","avt","avgfreq","avgband"]);
+  $("derivCtl").hidden = !uses(["tke","tkv"]);
   $("v-aw").textContent = p.attrWin;
   $("v-dl").textContent = p.attrDl;
   syncBadges();
@@ -2132,10 +2136,6 @@ function redraw(){
 
   sizePanels(p.ph);
 
-  const any = list => (p.attrSel || []).some(k => list.includes(k));
-  $("bandCtl").hidden = !any(["band","rgb"]);
-  $("winCtl").hidden = !any(["rms","avt","avgfreq","avgband"]);
-  $("derivCtl").hidden = !any(["tke","tkv"]);
   if (ATTR){
     $("attrPanel").hidden = false;
     $("attrTitle").textContent = ATTR.title;
