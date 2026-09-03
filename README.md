@@ -296,6 +296,24 @@ The shading adds no information the amplitude did not already carry, so nothing
 seen in it is evidence on its own. Confirm a feature against the amplitude or an
 attribute before interpreting it.
 
+## Adjusting the colour scale
+
+Click the scale strip under any attribute panel, or the colour bar beside the
+single attribute panel, and an editor opens for that attribute: colour map,
+invert, a clip percentile, and explicit minimum and maximum. Nothing is
+recomputed, since only the value-to-colour mapping changes.
+
+The clip percentile is the quick fix for a display dominated by a few extreme
+samples: at the 99th percentile one percent of samples sit at an end of the bar,
+at the 95th five percent do. Signed attributes stay symmetric about zero so
+polarity remains readable. Explicit minimum and maximum matter when comparing
+two crops or two lines, because the automatic range is computed per attribute
+per crop and the same colour otherwise means different values in each panel.
+
+Choices are held per attribute and cleared when the crop, file or attribute set
+changes. The three seismic panels keep using the section colour and clip in the
+Display tab, so input, kept and removed stay on one scale.
+
 ## Clustering
 
 "Cluster with a self-organizing map" in the Attributes tab fits a grid of nodes
