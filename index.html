@@ -267,6 +267,7 @@ button.primary:hover{background:#6d1213;border-color:#6d1213}
 .srow select{padding:.2rem;font:inherit;font-size:.76rem;border:1px solid var(--rule);
   border-radius:2px;background:var(--paper)}
 .srow button{font-size:.74rem;padding:.25rem .5rem;align-self:center}
+[data-style]{cursor:pointer}
 .mcard .mscale[data-style]{cursor:pointer}
 .mcard .mscale[data-style]:hover{background:var(--fill)}
 .mcard .mscale[data-style] .cbstrip:hover{border-color:var(--red)}
@@ -342,7 +343,7 @@ details pre{
 <header>
   <h1>Deep Reflection</h1>
   <span class="sub">filters, attributes, and what each one leaves out</span>
-  <span class="ver" title="build date">v2026.09.21</span>
+  <span class="ver" title="build date">v2026.09.22</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -625,21 +626,21 @@ details pre{
   <div id="panels" hidden>
     <div class="panel">
       <div class="cap"><h3>Input</h3><span class="note">as read from the file<span id="decNote"></span></span></div>
-      <div class="plot" id="pf0"><div class="yax"><canvas class="axis" id="yf0"></canvas></div><div class="frame" id="f0"><canvas id="cIn"></canvas><div id="cropBox"></div><div class="readout" id="r0"></div></div><div class="cbar"><canvas class="axis" id="bf0"></canvas></div><div class="xax"><canvas class="axis" id="xf0"></canvas></div></div>
+      <div class="plot" id="pf0"><div class="yax"><canvas class="axis" id="yf0"></canvas></div><div class="frame" id="f0"><canvas id="cIn"></canvas><div id="cropBox"></div><div class="readout" id="r0"></div></div><div class="cbar" data-style="__section" title="Click to adjust the scale for all three seismic panels"><canvas class="axis" id="bf0"></canvas></div><div class="xax"><canvas class="axis" id="xf0"></canvas></div></div>
     </div>
     <div class="panel">
       <div class="cap"><h3>Kept</h3><span class="note" id="keptNote">no filters active</span><span class="busy" id="busy" hidden>working…</span></div>
-      <div class="plot" id="pf1"><div class="yax"><canvas class="axis" id="yf1"></canvas></div><div class="frame" id="f1"><canvas id="cKe"></canvas><div class="readout" id="r1"></div></div><div class="cbar"><canvas class="axis" id="bf1"></canvas></div><div class="xax"><canvas class="axis" id="xf1"></canvas></div></div>
+      <div class="plot" id="pf1"><div class="yax"><canvas class="axis" id="yf1"></canvas></div><div class="frame" id="f1"><canvas id="cKe"></canvas><div class="readout" id="r1"></div></div><div class="cbar" data-style="__section" title="Click to adjust the scale for all three seismic panels"><canvas class="axis" id="bf1"></canvas></div><div class="xax"><canvas class="axis" id="xf1"></canvas></div></div>
     </div>
     <div class="panel removed">
       <div class="cap"><h3>Removed</h3><span class="note">input minus kept, shown at <b id="remGain">4.0×</b> — carries <b id="remPct">0.0%</b> of the input energy</span></div>
-      <div class="plot" id="pf2"><div class="yax"><canvas class="axis" id="yf2"></canvas></div><div class="frame" id="f2"><canvas id="cRe"></canvas><div class="readout" id="r2"></div></div><div class="cbar"><canvas class="axis" id="bf2"></canvas></div><div class="xax"><canvas class="axis" id="xf2"></canvas></div></div>
+      <div class="plot" id="pf2"><div class="yax"><canvas class="axis" id="yf2"></canvas></div><div class="frame" id="f2"><canvas id="cRe"></canvas><div class="readout" id="r2"></div></div><div class="cbar" data-style="__section" title="Click to adjust the scale for all three seismic panels"><canvas class="axis" id="bf2"></canvas></div><div class="xax"><canvas class="axis" id="xf2"></canvas></div></div>
     </div>
 
     <div class="panel" id="attrPanel" hidden>
       <div class="cap"><h3 id="attrTitle">Attribute</h3><span class="note"
         id="attrNote"></span></div>
-      <div class="plot" id="pf3"><div class="yax"><canvas class="axis" id="yf3"></canvas></div><div class="frame" id="f3"><canvas id="cAt"></canvas><div class="readout" id="r3"></div></div><div class="cbar"><canvas class="axis" id="bf3"></canvas></div><div class="xax"><canvas class="axis" id="xf3"></canvas></div></div>
+      <div class="plot" id="pf3"><div class="yax"><canvas class="axis" id="yf3"></canvas></div><div class="frame" id="f3"><canvas id="cAt"></canvas><div class="readout" id="r3"></div></div><div class="cbar" id="cbarAttr"><canvas class="axis" id="bf3"></canvas></div><div class="xax"><canvas class="axis" id="xf3"></canvas></div></div>
     </div>
 
     <div id="multiPanel" hidden>
@@ -2367,9 +2368,20 @@ function drawAllAxes(clip, lut, p){
   if (ATTR && !$("attrPanel").hidden){
     drawYAxis("yf3", t0, t1, tunit, secPerUnit, vk);
     drawXAxis("xf3", xa, xb, xlab);
-    if (ATTR.rgb){ fitCanvas($("bf3")); return; }
+    if (ATTR.rgb){
+      fitCanvas($("bf3"));
+      const c0 = $("cbarAttr");
+      if (c0){ delete c0.dataset.style; c0.title = ""; }
+      return;
+    }
     const st3 = styleFor(ATTR);
     drawColorbar("bf3", st3.lo, st3.hi, lutFor(ATTR), ATTR.cbLabel || "");
+    const cba = $("cbarAttr");
+    if (cba){
+      if (ATTR.rgb){ delete cba.dataset.style; cba.title = ""; }
+      else { cba.dataset.style = ATTR.key;
+             cba.title = "Click to adjust the color scale"; }
+    }
   }
 }
 
@@ -3259,10 +3271,6 @@ document.addEventListener("click", e => {
   if (t){ openStyle(t.dataset.style); return; }
   // The color bar canvas sits inside a padded column; requiring the click to
   // land exactly on the canvas made it feel dead.
-  const cb = e.target.closest ? e.target.closest(".cbar") : null;
-  if (!cb) return;
-  if (e.target.closest("#attrPanel")){ if (ATTR && !ATTR.rgb) openStyle(ATTR.key); }
-  else if (SEG && KEPT) openStyle(SECTION);
 });
 for (const id of ["styleCmap","styleInv","styleLo","styleHi"])
   $(id).addEventListener("change", () => applyStyle(false));
