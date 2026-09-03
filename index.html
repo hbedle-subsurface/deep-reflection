@@ -343,7 +343,7 @@ details pre{
 <header>
   <h1>Deep Reflection</h1>
   <span class="sub">filters, attributes, and what each one leaves out</span>
-  <span class="ver" title="build date">v2026.09.22</span>
+  <span class="ver" title="build date">v2026.09.23</span>
   <span class="spacer"></span>
   <button class="helpmain" data-help="start">Reference</button>
   <span class="privacy">Your seismic data is read locally and is never transmitted. Page visits are counted anonymously.</span>
@@ -533,11 +533,20 @@ details pre{
     <div class="ctl">
       <label for="cmap">Section color</label>
       <select id="cmap">
-        <option value="bwr" selected>Blue–white–red</option>
-        <option value="gray">Gray, dark lows</option>
-        <option value="graygb">Gray, dark highs</option>
-        <option value="seis">Blue–black–red</option>
-        <option value="viridis">Viridis</option>
+        <optgroup label="Diverging, neutral at the middle">
+          <option value="bwr" selected>Blue–white–red</option>
+          <option value="seis">Blue–black–red</option>
+          <option value="coolwarm">Cool–warm</option>
+          <option value="vik">Vik (CVD-safe)</option>
+        </optgroup>
+        <optgroup label="Sequential">
+          <option value="gray">Gray, dark lows</option>
+          <option value="graygb">Gray, dark highs</option>
+          <option value="magma">Magma</option>
+          <option value="viridis">Viridis</option>
+          <option value="cividis">Cividis</option>
+          <option value="batlow">Batlow (CVD-safe rainbow)</option>
+        </optgroup>
       </select>
     </div>
     <div class="ctl">
@@ -604,13 +613,20 @@ details pre{
       <b id="styleName"></b>
       <label>Color
         <select id="styleCmap">
-          <option value="magma">Magma</option>
-          <option value="viridis">Viridis</option>
-          <option value="cividis">Cividis</option>
-          <option value="batlow">Batlow</option>
-          <option value="gray">Gray</option>
-          <option value="coolwarm">Blue–white–red</option>
-          <option value="vik">Vik</option>
+              <optgroup label="Diverging, neutral at the middle">
+                <option value="bwr">Blue–white–red</option>
+                <option value="seis">Blue–black–red</option>
+                <option value="coolwarm">Cool–warm</option>
+                <option value="vik">Vik (CVD-safe)</option>
+              </optgroup>
+              <optgroup label="Sequential">
+                <option value="gray">Gray, dark lows</option>
+                <option value="graygb">Gray, dark highs</option>
+                <option value="magma">Magma</option>
+                <option value="viridis">Viridis</option>
+                <option value="cividis">Cividis</option>
+                <option value="batlow">Batlow (CVD-safe rainbow)</option>
+              </optgroup>
         </select>
       </label>
       <label class="chk"><input type="checkbox" id="styleInv">Invert</label>
@@ -1490,14 +1506,30 @@ function attrUnwrap(dphi, env, phase, nx, nz, dts){
 }
 
 /* ============================ display ============================ */
-// control points across the full signed range, low amplitude first
+/* One table of color maps for everything: the seismic panels and the
+   attributes drew from separate tables, so a name offered in one editor
+   resolved to the fallback in the other and several options silently produced
+   gray. Control points run low value first. */
 const CMAPS = {
-  gray:    [[0,0,0],[255,255,255]],
-  graygb:  [[255,255,255],[0,0,0]],
+  /* diverging, neutral in the middle, for anything that straddles zero */
   bwr:     [[0,0,180],[40,90,255],[255,255,255],[255,90,40],[180,0,0]],
   seis:    [[0,60,255],[0,0,0],[255,60,0]],
+  coolwarm:[[59,76,192],[144,178,254],[221,221,221],[246,161,120],[180,4,38]],
+  vik:     [[0,18,97],[32,100,160],[139,190,214],[245,244,241],
+            [214,150,110],[177,76,50],[89,8,8]],
+  /* sequential */
+  gray:    [[0,0,0],[255,255,255]],
+  graygb:  [[255,255,255],[0,0,0]],
+  magma:   [[0,0,4],[28,16,68],[79,18,123],[129,37,129],[181,54,122],
+            [229,80,100],[251,135,97],[254,194,135],[252,253,191]],
   viridis: [[68,1,84],[71,44,122],[59,81,139],[44,113,142],[33,144,141],
-            [39,173,129],[92,200,99],[170,220,50],[253,231,37]]
+            [39,173,129],[92,200,99],[170,220,50],[253,231,37]],
+  cividis: [[0,32,76],[35,64,110],[70,93,113],[110,120,120],
+            [149,148,113],[194,178,95],[244,211,62],[255,233,69]],
+  /* perceptually uniform and readable with color vision deficiency, the
+     honest substitute for a rainbow */
+  batlow:  [[1,25,89],[13,61,96],[32,91,92],[68,111,70],[117,128,45],
+            [172,142,42],[223,160,88],[250,191,158],[250,204,250]]
 };
 function buildLUT(name){
   const cp = CMAPS[name] || CMAPS.gray;
@@ -1510,31 +1542,7 @@ function buildLUT(name){
   }
   return lut;
 }
-const ACMAPS = {
-  magma:   [[0,0,4],[28,16,68],[79,18,123],[129,37,129],[181,54,122],
-            [229,80,100],[251,135,97],[254,194,135],[252,253,191]],
-  viridis: [[68,1,84],[59,81,139],[33,144,141],[92,200,99],[253,231,37]],
-  gray:    [[0,0,0],[255,255,255]],
-  coolwarm:[[59,76,192],[144,178,254],[221,221,221],[246,161,120],[180,4,38]],
-  /* batlow: perceptually uniform and readable with color vision deficiency,
-     the honest substitute for a rainbow */
-  batlow:  [[1,25,89],[13,61,96],[32,91,92],[68,111,70],[117,128,45],
-            [172,142,42],[223,160,88],[250,191,158],[250,204,250]],
-  /* vik: diverging, CVD-safe, symmetric about its midpoint */
-  vik:     [[0,18,97],[32,100,160],[139,190,214],[245,244,241],
-            [214,150,110],[177,76,50],[89,8,8]],
-  cividis: [[0,32,76],[35,64,110],[70,93,113],[110,120,120],
-            [149,148,113],[194,178,95],[244,211,62],[255,233,69]]
-};
-function buildALUT(name){
-  const cp = ACMAPS[name] || ACMAPS.gray, seg = cp.length-1;
-  const lut = new Uint8ClampedArray(512*3);
-  for (let i=0;i<512;i++){
-    const u = (i/511)*seg, k = Math.min(seg-1, Math.floor(u)), f = u-k;
-    for (let c=0;c<3;c++) lut[i*3+c] = Math.round(cp[k][c]*(1-f) + cp[k+1][c]*f);
-  }
-  return lut;
-}
+const buildALUT = buildLUT;   // one table now; kept for call sites
 function drawRGB(canvas, ch, sc, nx, nz0){
   const nz = Math.min(nz0, DISPLAY_H > 0 ? DISPLAY_H : nz0);
   ch = ch.map(c => reduceTime(c, nx, nz0, nz, "mean").a);
