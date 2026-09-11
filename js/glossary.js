@@ -374,8 +374,18 @@ function glossaryIndex(){
 }
 
 const GLOSS_SKIP = {SCRIPT:1, STYLE:1, CANVAS:1, TEXTAREA:1, INPUT:1, SELECT:1,
-                    OPTION:1, BUTTON:1, CODE:1, SVG:1,
+                    OPTION:1, BUTTON:1, CODE:1, SVG:1, LABEL:1, FIGCAPTION:1,
                     H1:1, H2:1, H3:1, H4:1};
+
+/* Regions where a marked term would be noise rather than help: the controls,
+   the navigation, the footer. */
+const GLOSS_SKIP_IN = ["labhead", "controls", "tabs", "masthead", "pager",
+                       "modbar", "readout"];
+
+/* Most terms turn up together in the paragraph that introduces the subject.
+   Marking all of them leaves prose that is more underline than text, so a
+   block takes two and the rest wait for wherever they next appear. */
+const GLOSS_PER_BLOCK = 2;
 
 /* Whole-word, case-insensitive. The leading group keeps the character before
    the term so that it can be put back; a lookahead is used after the term so
@@ -391,14 +401,30 @@ function glossaryPattern(word){
    after the text of the page is in place. */
 function glossaryScan(root){
   const index = glossaryIndex().map(([w, slug]) => [glossaryPattern(w), w, slug]);
+
+  // A page scans more than once: once when it loads, again whenever a pane
+  // rewrites its text. Both the once-per-page rule and the per-block limit are
+  // taken from the marks already standing in the document, so a second scan
+  // adds to the first instead of starting over, and a term whose paragraph has
+  // since been replaced becomes available again.
   const done = {};
+  const perBlock = new Map();
+  document.querySelectorAll(".gterm[data-g]").forEach(b => {
+    if (b.closest(".gcard")) return;
+    done[b.dataset.g] = true;
+    const blk = blockOf(b);
+    if (blk) perBlock.set(blk, (perBlock.get(blk) || 0) + 1);
+  });
   const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(n){
       if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
       for (let p = n.parentNode; p && p !== document.body; p = p.parentNode){
         if (GLOSS_SKIP[p.nodeName]) return NodeFilter.FILTER_REJECT;
-        if (p.classList && (p.classList.contains("gterm") ||
-                            p.classList.contains("no-gloss"))) return NodeFilter.FILTER_REJECT;
+        if (!p.classList) continue;
+        if (p.classList.contains("gterm") || p.classList.contains("no-gloss"))
+          return NodeFilter.FILTER_REJECT;
+        for (const c of GLOSS_SKIP_IN)
+          if (p.classList.contains(c)) return NodeFilter.FILTER_REJECT;
       }
       return NodeFilter.FILTER_ACCEPT;
     }
@@ -407,6 +433,7 @@ function glossaryScan(root){
   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n);
 
   for (const node of texts){
+    const block = blockOf(node);
     let cur = node;
     // a paragraph can carry several terms, so the tail of each split is
     // scanned again rather than moving on to the next node
@@ -421,6 +448,9 @@ function glossaryScan(root){
           best = {at, len: m[2].length, slug};
       }
       if (!best) break;
+      const used = perBlock.get(block) || 0;
+      if (used >= GLOSS_PER_BLOCK) break;
+      perBlock.set(block, used + 1);
       const hit = cur.splitText(best.at);
       const tail = hit.splitText(best.len);
       const btn = document.createElement("button");
@@ -433,6 +463,20 @@ function glossaryScan(root){
       cur = tail;
     }
   }
+}
+
+/* The paragraph, list item or cell a node sits in, so that the limit counts
+   marks per piece of text rather than per text node. */
+const GLOSS_INLINE = {B:1, I:1, EM:1, STRONG:1, SPAN:1, A:1, SMALL:1, ABBR:1,
+                      SUP:1, SUB:1, U:1, MARK:1, Q:1, CITE:1, BUTTON:1};
+
+function blockOf(node){
+  let e = node.nodeType === 3 ? node.parentElement : node;
+  while (e && e !== document.body){
+    if (!GLOSS_INLINE[e.nodeName]) return e;
+    e = e.parentElement;
+  }
+  return e;
 }
 
 let glossCard = null;

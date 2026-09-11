@@ -37,8 +37,7 @@
           <canvas class="axY" id="axY"></canvas>
           <figure>
             <figcaption><span id="secTitle">No line loaded</span>
-              <button type="button" class="gterm" id="btnPop"
-                      style="border-bottom-style:solid">open in a window</button></figcaption>
+              <button type="button" class="popout" id="btnPop">open in a window</button></figcaption>
             <canvas class="sect" id="cSec"></canvas>
           </figure>
           <span></span>
@@ -57,8 +56,8 @@
             <input type="range" id="clip" min="90" max="100" step="0.5" value="98">
           </div>
           <div class="ctl">
-            <label for="ph">Panel height <span class="readout" id="phR">460 px</span></label>
-            <input type="range" id="ph" min="240" max="900" step="20" value="460">
+            <label for="ph">Panel height <span class="readout" id="phR">380 px</span></label>
+            <input type="range" id="ph" min="240" max="900" step="20" value="380">
           </div>
           <div class="ctl">
             <label for="vel">Depth scale <span class="readout" id="velR">off</span></label>
@@ -273,15 +272,16 @@ function readParams(){
 function readouts(){
   const p = readParams();
   $("clipR").textContent = p.clip + "%";
-  $("phR").textContent   = p.ph + " px";
+  $("phR").textContent   = panelHeight(p.ph) + " px";
   $("velR").textContent  = p.vel > 0 ? p.vel.toFixed(1) + " km/s" : "off";
 }
 
 function redraw(){
   readouts();
   const p = readParams();
-  ["cSec","axY"].forEach(id => { $(id).style.height = p.ph + "px"; });
-  DISPLAY_H = Math.max(60, Math.round(p.ph * (window.devicePixelRatio || 1)));
+  const ph = panelHeight(p.ph);
+  ["cSec","axY"].forEach(id => { $(id).style.height = ph + "px"; });
+  DISPLAY_H = Math.max(60, Math.round(panelHeight(p.ph) * (window.devicePixelRatio || 1)));
   if (!SEG) return;
   const {nx, ns, dt} = SEG;
   const clip = percentileAbs(SEG.data, p.clip) || 1e-30;
@@ -387,7 +387,7 @@ pageReady(() => {
   setupTabs($("tabwrap"), () => stackSticky());
 
   ["clip","ph","vel","cmap"].forEach(id => $(id).addEventListener("input", redraw));
-  window.addEventListener("resize", redraw);
+  window.addEventListener("resize", () => { redraw(); stackSticky(); });
 
   $("btnWY").addEventListener("click", () =>
     openSample("../data/COCORP_WY01_coherency.sgy", "COCORP Wyoming Line 1"));

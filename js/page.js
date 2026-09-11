@@ -94,14 +94,28 @@ function setupTabs(wrap, onShow){
   return {show, count: btns.length};
 }
 
-/* The tab strip and the live panel are both sticky. Without this the strip
-   scrolls up underneath the panel and the labels disappear. */
+/* The live panel is pinned while the tabs change underneath it, which only
+   works while the panel leaves room for the text. A tall panel on a short
+   window would take most of the screen and push the tab strip down over the
+   reading, so past about two thirds of the window height the panel stops being
+   pinned and the page scrolls normally.
+
+   The tab strip is never pinned. Two stacked sticky elements is what put the
+   strip below its own panes. */
 function stackSticky(){
-  const head = document.querySelector(".labhead");
   const strip = document.querySelector(".tabs");
-  if (!head || !strip) return;
-  const h = Math.round(head.getBoundingClientRect().height);
-  strip.style.top = h + "px";
+  if (strip) strip.style.position = "static";
+  const head = document.querySelector(".labhead");
+  if (!head) return;
+  head.style.position = "static";                    // measure it unpinned
+  const h = head.getBoundingClientRect().height;
+  head.style.position = h < window.innerHeight * 0.68 ? "sticky" : "static";
+}
+
+/* Panel height in CSS pixels, held to something that leaves room for the text
+   below it. The slider sets what is asked for; this is what is drawn. */
+function panelHeight(asked){
+  return Math.max(180, Math.min(asked, Math.round(window.innerHeight * 0.52)));
 }
 
 /* The step pages that exist. Links to anything else are left in place but

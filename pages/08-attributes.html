@@ -43,8 +43,7 @@
           </figure>
           <figure>
             <figcaption><span id="attrTitle">Attribute</span>
-              <button type="button" class="gterm" id="btnPop"
-                      style="border-bottom-style:solid">open in a window</button></figcaption>
+              <button type="button" class="popout" id="btnPop">open in a window</button></figcaption>
             <canvas class="sect" id="cAttr"></canvas>
           </figure>
           <canvas class="cbar" id="cbar"></canvas>
@@ -70,8 +69,8 @@
             <input type="range" id="clip" min="90" max="100" step="0.5" value="98">
           </div>
           <div class="ctl">
-            <label for="ph">Panel height <span class="readout" id="phR">420 px</span></label>
-            <input type="range" id="ph" min="240" max="900" step="20" value="420">
+            <label for="ph">Panel height <span class="readout" id="phR">380 px</span></label>
+            <input type="range" id="ph" min="240" max="900" step="20" value="380">
           </div>
           <div class="ctl">
             <label for="vel">Depth scale <span class="readout" id="velR">6.0 km/s</span></label>
@@ -359,7 +358,7 @@ function readouts(){
   $("relZR").textContent     = p.relZ.toFixed(2) + "\u00d7";
   $("relSmR").textContent    = p.relSm;
   $("clipR").textContent     = p.clip + "%";
-  $("phR").textContent       = p.ph + " px";
+  $("phR").textContent       = panelHeight(p.ph) + " px";
   $("velR").textContent      = p.vel > 0 ? p.vel.toFixed(1) + " km/s" : "off";
 }
 
@@ -404,9 +403,9 @@ function syncPickers(){
 
 function sizeCanvas(){
   const p = readParams();
-  const h = p.ph + "px";
+  const h = panelHeight(p.ph) + "px";
   ["cAmp","cAttr","axY","cbar"].forEach(id => { $(id).style.height = h; });
-  DISPLAY_H = Math.max(60, Math.round(p.ph * (window.devicePixelRatio || 1)));
+  DISPLAY_H = Math.max(60, Math.round(panelHeight(p.ph) * (window.devicePixelRatio || 1)));
 }
 
 function recompute(){
@@ -505,7 +504,7 @@ pageReady(() => {
     popOut("cAttr", RES ? RES.title : "Attribute");
   });
 
-  window.addEventListener("resize", () => { sizeCanvas(); draw_all(); });
+  window.addEventListener("resize", () => { sizeCanvas(); draw_all(); stackSticky(); });
 
   pageChrome();
 
