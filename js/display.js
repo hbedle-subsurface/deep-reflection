@@ -271,6 +271,68 @@ function drawXAxis(id, x0, x1, label){
   ctx.fillText(label, w / 2, 20);
 }
 
+/* A horizontal color bar under the panel it belongs to. There is room along
+   the width of a section for the quantity, the end values and a tick or two,
+   where a narrow vertical strip beside the image has room for none of them.
+
+   Where the range crosses zero the zero is marked. On a diverging quantity —
+   dip, the amplitude volume transform, relative impedance — which side of zero
+   a color sits on is the reading, and a bar that does not say where zero falls
+   leaves that to be guessed from the color ramp. */
+function drawColorbarH(id, vmin, vmax, lut, label, unit){
+  const cv = $(id);
+  if (!cv) return;
+  const {ctx, w, h, ok} = fitCanvas(cv);
+  if (!ok) return;
+  const x0 = 2, x1 = w - 2, bw = x1 - x0;
+  const top = label ? 14 : 4, bh = 12;
+
+  const img = ctx.createImageData(Math.max(2, Math.round(bw)), 1);
+  for (let k = 0; k < img.width; k++){
+    const idx = Math.round(k / (img.width - 1 || 1) * 511);
+    img.data[k*4] = lut[idx*3]; img.data[k*4+1] = lut[idx*3+1];
+    img.data[k*4+2] = lut[idx*3+2]; img.data[k*4+3] = 255;
+  }
+  const tmp = document.createElement("canvas");
+  tmp.width = img.width; tmp.height = 1;
+  tmp.getContext("2d").putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tmp, x0, top, bw, bh);
+  ctx.strokeStyle = "#C9CDD2"; ctx.lineWidth = 1;
+  ctx.strokeRect(x0 + 0.5, top + 0.5, bw, bh);
+
+  if (label){
+    ctx.font = "9.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillStyle = "#841617";
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(label.toUpperCase(), x0, top - 4);
+    if (unit){
+      ctx.fillStyle = "#5C6670";
+      ctx.textAlign = "right";
+      ctx.fillText(unit, x1, top - 4);
+    }
+  }
+
+  const at = v => x0 + (v - vmin) / ((vmax - vmin) || 1) * bw;
+  ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillStyle = "#5C6670";
+  ctx.textBaseline = "top";
+  const span = vmax - vmin;
+  ctx.textAlign = "left";  ctx.fillText(fmtTick(vmin, span/4), x0, top + bh + 4);
+  ctx.textAlign = "right"; ctx.fillText(fmtTick(vmax, span/4), x1, top + bh + 4);
+
+  if (vmin < 0 && vmax > 0){
+    const xz = at(0);
+    ctx.strokeStyle = "#16191C"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xz + 0.5, top); ctx.lineTo(xz + 0.5, top + bh + 3); ctx.stroke();
+    // only where it will not sit on top of an end label
+    if (xz > x0 + 26 && xz < x1 - 26){
+      ctx.fillStyle = "#16191C"; ctx.textAlign = "center";
+      ctx.fillText("0", xz, top + bh + 4);
+    }
+  }
+}
+
 function drawColorbar(id, vmin, vmax, lut, label){
   const {ctx, w, h, ok} = fitCanvas($(id));
   if (!ok) return;

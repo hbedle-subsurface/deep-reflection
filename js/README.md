@@ -29,6 +29,7 @@ step: the site stays a set of files that can be opened from disk.
 | `display.js` | colormaps, section and attribute rasterizing, time decimation, percentiles, f-k spectrum plot, axes and color bars | canvas only |
 | `balance.js` | time-variant spectral balancing over a filter bank, and the taper response for drawing |
 | `glossary.js` | the term list, the automatic markup, and the card it opens |
+| `page.js` | the step-page shell: stage guard, tabs, PNG export, link sharing |
 | `som.js` | random number generator, training, classification, class colors, neighbor agreement, phase randomization | no |
 | `help.js` | the reference text and the document written into the reference window | writes its own window |
 | `store.js` | the IndexedDB stage store that carries a section from one step page to the next | no |
@@ -37,6 +38,27 @@ step: the site stays a set of files that can be opened from disk.
 writes the page. The panel drawing that does — the spectrum curves, the
 time-frequency track, the striping note — is still in `index.html`, because
 each of those belongs to one step page and will be written there.
+
+## Shared drop-ins from the other repositories
+
+`assets/panelout.js` is the connected control pop-out, copied unchanged from
+the AVO set; `ADD-PANELOUT.md` is its own instructions. It needs the header to
+be `<div class="labhead">` with each half opening on a `<p class="cap">` line,
+which both step pages now do. The button lands on the last of those captions.
+`tools/harness-panelout.js` came with it and is written against that
+repository's script names, so it needs its three `.replace` lines repointed
+before it will run here.
+
+`drawColorbarH` puts the bar under the panel rather than beside it: the width
+of a section has room for the quantity, the units and the value at each end,
+where a strip 66 pixels wide has room for none of them. Where the range crosses
+zero the zero is marked, which is the reading on any diverging quantity — dip,
+the amplitude volume transform, relative impedance.
+
+`savePanelPNG` writes the panels at the resolution they were drawn at rather
+than the size they are displayed. `stateRead` and `stateWrite` keep the control
+settings in the address bar so a particular setup can be handed over as a link;
+values left at the page's own defaults stay out of the URL.
 
 ## Glossary
 

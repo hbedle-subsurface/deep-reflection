@@ -33,11 +33,12 @@
   <div class="wrap">
     <div class="labgrid">
       <div>
+        <p class="cap">The line as it was read
+          <span>&mdash; nothing has been done to it yet</span></p>
         <div class="panelrow" id="panelrow" style="grid-template-columns:54px minmax(0,1fr) 66px">
           <canvas class="axY" id="axY"></canvas>
           <figure>
-            <figcaption><span id="secTitle">No line loaded</span>
-              <button type="button" class="popout" id="btnPop">open in a window</button></figcaption>
+            <figcaption><span id="secTitle">No line loaded</span></figcaption>
             <canvas class="sect" id="cSec"></canvas>
           </figure>
           <span></span>
@@ -49,8 +50,8 @@
       </div>
 
       <div class="controls">
+        <p class="cap">Display <span>&mdash; these change the picture, not the samples</span></p>
         <div class="ctl-col">
-          <h2>Display</h2>
           <div class="ctl">
             <label for="clip">Amplitude clip <span class="readout" id="clipR">98%</span></label>
             <input type="range" id="clip" min="90" max="100" step="0.5" value="98">
@@ -77,8 +78,12 @@
 </div>
 
 <div class="wrap">
-  <div class="modbar"><span class="hint">The panel above stays where it is
-    while the tabs change underneath.</span></div>
+  <div class="modbar">
+    <span class="hint">The panel above stays where it is while the tabs change
+      underneath.</span>
+    <button class="btn ghost small" type="button" id="btnPng">Save the panel as a picture</button>
+    <button class="btn ghost small" type="button" id="btnLink">Copy a link to this setup</button>
+  </div>
 
   <div class="tab-wrap" id="tabwrap">
     <div class="tabs">
@@ -254,6 +259,7 @@
 <script src="../js/help.js"></script>
 <script src="../js/glossary.js"></script>
 <script src="../js/store.js"></script>
+<script src="../assets/panelout.js"></script>
 <script src="../js/page.js"></script>
 <script>
 /* ---------------------------------------------------------------
@@ -263,6 +269,9 @@
 
 let SEG = null;
 let SRC = "";          // what was opened, for the caption
+
+/* every control whose setting belongs in a shared link */
+const CONTROLS = ["clip", "ph", "vel", "cmap"];
 
 function readParams(){
   return {clip: +$("clip").value, ph: +$("ph").value,
@@ -383,10 +392,13 @@ function openSample(url, label){
 }
 
 pageReady(() => {
+  stateWrite(stateRead(CONTROLS));
   readouts();
   setupTabs($("tabwrap"), () => stackSticky());
 
-  ["clip","ph","vel","cmap"].forEach(id => $(id).addEventListener("input", redraw));
+  CONTROLS.forEach(id => $(id).addEventListener("input", () => {
+    stateWrite(CONTROLS); redraw();
+  }));
   window.addEventListener("resize", () => { redraw(); stackSticky(); });
 
   $("btnWY").addEventListener("click", () =>
@@ -409,9 +421,9 @@ pageReady(() => {
     if (f) openFile(f);
   });
 
-  $("btnPop").addEventListener("click", e => {
-    e.preventDefault(); popOut("cSec", SRC || "Section");
-  });
+  $("btnPng").addEventListener("click", () =>
+    savePanelPNG(["cSec"], SRC || "section"));
+  $("btnLink").addEventListener("click", e => copyPageLink(e.currentTarget));
 
   pageChrome();
 

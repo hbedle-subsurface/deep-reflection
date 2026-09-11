@@ -168,6 +168,85 @@ function popOut(canvasId, title){
   return sync;
 }
 
+/* ---------------------------------------------------------------------
+   Taking something away: a picture of the panel, or a link that reopens
+   the page with the same settings.
+   --------------------------------------------------------------------- */
+
+/* One PNG of however many panels are on screen, laid out the way they are on
+   the page, at the resolution they were drawn at rather than the size they are
+   displayed. */
+function savePanelPNG(ids, name){
+  const cvs = ids.map(id => $(id)).filter(c => c && c.width > 1);
+  if (!cvs.length) return;
+  const gap = 12, pad = 10;
+  const h = Math.max.apply(null, cvs.map(c => c.height));
+  const w = cvs.reduce((a, c) => a + c.width, 0) + gap * (cvs.length - 1);
+  const out = document.createElement("canvas");
+  out.width = w + pad * 2; out.height = h + pad * 2;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, out.width, out.height);
+  let x = pad;
+  for (const c of cvs){ ctx.drawImage(c, x, pad); x += c.width + gap; }
+  const a = document.createElement("a");
+  a.download = name.replace(/[^\w.-]+/g, "-").toLowerCase() + ".png";
+  a.href = out.toDataURL("image/png");
+  a.click();
+}
+
+/* The control settings in the address bar, so a particular setup can be handed
+   to someone as a link. Values equal to the page's own defaults are left out,
+   which keeps an untouched page at a clean URL. */
+let stateTimer = null;
+function stateWrite(ids){
+  clearTimeout(stateTimer);
+  stateTimer = setTimeout(() => {
+    const q = new URLSearchParams();
+    for (const id of ids){
+      const el = $(id);
+      if (!el) continue;
+      const v = el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value;
+      if (v === el.dataset.pageDefault) continue;
+      q.set(id, v);
+    }
+    const s = q.toString();
+    // a page opened straight off disk is a file:// URL and cannot take a
+    // replaceState; sharing a link is not available there and that is all
+    try { history.replaceState(null, "", s ? "?" + s : location.pathname); }
+    catch (e){ /* file:// */ }
+  }, 250);
+}
+
+/* Record what each control started at, then apply anything the URL carries.
+   Returns the ids so the caller can hand them straight back to stateWrite. */
+function stateRead(ids){
+  const q = new URLSearchParams(location.search);
+  for (const id of ids){
+    const el = $(id);
+    if (!el) continue;
+    el.dataset.pageDefault = el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value;
+    if (!q.has(id)) continue;
+    const v = q.get(id);
+    if (el.type === "checkbox") el.checked = v === "1";
+    else el.value = v;
+  }
+  return ids;
+}
+
+function copyPageLink(btn){
+  const say = msg => {
+    const old = btn.dataset.label || btn.textContent;
+    btn.dataset.label = old;
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = btn.dataset.label; }, 1600);
+  };
+  if (!navigator.clipboard) return say("Copy it from the address bar");
+  navigator.clipboard.writeText(location.href)
+    .then(() => say("Link copied"))
+    .catch(() => say("Copy it from the address bar"));
+}
+
 function pageReady(fn){
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", fn);

@@ -41,6 +41,15 @@
   display: block; width: 100%; background: #fff;
   border: 1px solid var(--rule);
 }
+/* the color bar sits under the panel it belongs to, where there is width for
+   the quantity and the values at both ends */
+.panelrow canvas.cbarH { display: block; width: 100%; height: 34px; margin-top: 4px; }
+
+/* the pop-out and export buttons live on the bar under the header, outside the
+   header's own rule that hides buttons in it */
+.modbar { gap: 10px; }
+.modbar .hint { flex: 1 1 260px; }
+
 .axXrow { display: grid; grid-template-columns: 54px minmax(0, 1fr) 66px; gap: 0 8px; }
 .axXrow canvas { width: 100%; height: 30px; display: block; }
 

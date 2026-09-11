@@ -35,26 +35,28 @@
   <div class="wrap">
     <div class="labgrid">
       <div>
-        <div class="panelrow">
+        <p class="cap">The section and the attribute
+          <span>&mdash; same axes, same traces</span></p>
+        <div class="panelrow" style="grid-template-columns:54px minmax(0,1fr) minmax(0,1fr)">
           <canvas class="axY" id="axY"></canvas>
           <figure>
-            <figcaption><span>Amplitude</span><b id="fromLabel">—</b></figcaption>
+            <figcaption><span>Amplitude</span><b id="fromLabel">&mdash;</b></figcaption>
             <canvas class="sect" id="cAmp"></canvas>
           </figure>
           <figure>
-            <figcaption><span id="attrTitle">Attribute</span>
-              <button type="button" class="popout" id="btnPop">open in a window</button></figcaption>
+            <figcaption><span id="attrTitle">Attribute</span></figcaption>
             <canvas class="sect" id="cAttr"></canvas>
+            <canvas class="cbarH" id="cbar"></canvas>
           </figure>
-          <canvas class="cbar" id="cbar"></canvas>
           <p class="unitline" id="unitLine"></p>
         </div>
-        <div class="axXrow"><span></span><canvas id="axX"></canvas><span></span></div>
+        <div class="axXrow" style="grid-template-columns:54px minmax(0,1fr)">
+          <span></span><canvas id="axX"></canvas></div>
       </div>
 
       <div class="controls">
+        <p class="cap">Display <span>&mdash; these change the picture, not the numbers</span></p>
         <div class="ctl-col">
-          <h2>Display</h2>
           <div class="ctl">
             <label for="cmap">Attribute color map</label>
             <select id="cmap">
@@ -85,8 +87,12 @@
 <div class="wrap">
   <div id="guard" hidden></div>
 
-  <div class="modbar"><span class="hint">Each tab is one family of attributes.
-    The panel above stays where it is.</span></div>
+  <div class="modbar">
+    <span class="hint">Each tab is one family of attributes. The panel above
+      stays where it is.</span>
+    <button class="btn ghost small" type="button" id="btnPng">Save the panels as a picture</button>
+    <button class="btn ghost small" type="button" id="btnLink">Copy a link to this setup</button>
+  </div>
 
   <div class="tab-wrap" id="tabwrap">
     <div class="tabs">
@@ -308,6 +314,7 @@
 <script src="../js/glossary.js"></script>
 <script src="../js/store.js"></script>
 <script src="../js/attr-text.js"></script>
+<script src="../assets/panelout.js"></script>
 <script src="../js/page.js"></script>
 <script>
 /* ---------------------------------------------------------------
@@ -321,6 +328,10 @@ let CACHE = null;        // analytic signal and the rest, built once per section
 let TENSOR = null;       // built only when a geometry attribute asks for it
 let KEY = "avt";
 let RELZ_TOUCHED = false;   // relief height is measured until the slider is moved
+
+/* every control whose setting belongs in a shared link */
+const CONTROLS = ["cmap","clip","ph","vel","attrWin","attrWinI","attrFc",
+                  "attrDl","relAz","relAlt","relZ","relSm","relSurf"];
 let RES = null;
 
 const PANE_GROUP = {"pane-amp":"amp", "pane-freq":"freq",
@@ -440,11 +451,13 @@ function draw_all(){
 
   if (RES.rgb){
     drawRGB($("cAttr"), RES.rgb, RES.scales, nx, ns);
+    // three channels have no one scale to put on a bar; the caption under the
+    // panel already names the three frequencies
     fitCanvas($("cbar"));
   } else {
     const lut = buildLUT(p.cmap === "gray" && RES.cmapDefault ? RES.cmapDefault : p.cmap);
     drawRange($("cAttr"), RES.a, nx, ns, RES.vmin, RES.vmax, lut);
-    drawColorbar("cbar", RES.vmin, RES.vmax, lut, RES.cbLabel || "");
+    drawColorbarH("cbar", RES.vmin, RES.vmax, lut, RES.title, RES.cbLabel || "");
   }
 
   const t0 = (j0 || 0) * dt * 1e-3;
@@ -487,10 +500,10 @@ pageReady(() => {
     stackSticky();
   });
 
-  ["cmap","clip","ph","vel","attrWin","attrWinI","attrFc","attrDl",
-   "relAz","relAlt","relZ","relSm","relSurf"].forEach(id => {
+  CONTROLS.forEach(id => {
     const el = $(id);
     if (el) el.addEventListener("input", () => {
+      stateWrite(CONTROLS);
       if (id === "attrDl") TENSOR = null;      // the tensor depends on this one
       if (id === "relZ") RELZ_TOUCHED = true;
       recompute();
@@ -499,13 +512,13 @@ pageReady(() => {
   linkWindows("attrWin2", "attrWin");
   linkWindows("attrWin", "attrWin2");
 
-  $("btnPop").addEventListener("click", e => {
-    e.preventDefault();
-    popOut("cAttr", RES ? RES.title : "Attribute");
-  });
+  $("btnPng").addEventListener("click", () =>
+    savePanelPNG(["cAmp", "cAttr"], "attribute-" + KEY));
+  $("btnLink").addEventListener("click", e => copyPageLink(e.currentTarget));
 
   window.addEventListener("resize", () => { sizeCanvas(); draw_all(); stackSticky(); });
 
+  stateWrite(stateRead(CONTROLS));
   pageChrome();
 
   resolveStage("balance").then(r => {
