@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A line to work on — Working with deep reflection data</title>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/glossary.css">
+<link rel="stylesheet" href="../assets/page.css">
+</head>
+<body id="top">
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="brand" href="../index.html"><span class="dot"></span>
+      Working with <b>deep reflection data</b></a>
+    <nav>
+      <a href="../index.html">All steps</a>
+      <a href="#" id="btnRef">Reference</a>
+    </nav>
+  </header>
+
+  <div class="mod-head">
+    <p class="eyebrow">Step 1 of 11</p>
+    <h1>A line to work on</h1>
+    <p class="sub">Every later step works on what is loaded here. Two sample
+      lines are included, and any 2D poststack SEG-Y file can be opened
+      instead. The file is read in the browser and is not sent anywhere.</p>
+  </div>
+</div>
+
+<div class="labhead" id="labhead">
+  <div class="wrap">
+    <div class="labgrid">
+      <div>
+        <div class="panelrow" id="panelrow" style="grid-template-columns:54px minmax(0,1fr) 66px">
+          <canvas class="axY" id="axY"></canvas>
+          <figure>
+            <figcaption><span id="secTitle">No line loaded</span>
+              <button type="button" class="gterm" id="btnPop"
+                      style="border-bottom-style:solid">open in a window</button></figcaption>
+            <canvas class="sect" id="cSec"></canvas>
+          </figure>
+          <span></span>
+          <p class="unitline" id="unitLine" style="grid-column:2 / 3"></p>
+        </div>
+        <div class="axXrow" style="grid-template-columns:54px minmax(0,1fr) 66px">
+          <span></span><canvas id="axX"></canvas><span></span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="ctl-col">
+          <h2>Display</h2>
+          <div class="ctl">
+            <label for="clip">Amplitude clip <span class="readout" id="clipR">98%</span></label>
+            <input type="range" id="clip" min="90" max="100" step="0.5" value="98">
+          </div>
+          <div class="ctl">
+            <label for="ph">Panel height <span class="readout" id="phR">460 px</span></label>
+            <input type="range" id="ph" min="240" max="900" step="20" value="460">
+          </div>
+          <div class="ctl">
+            <label for="vel">Depth scale <span class="readout" id="velR">off</span></label>
+            <input type="range" id="vel" min="0" max="8" step="0.5" value="0">
+          </div>
+          <div class="ctl">
+            <label for="cmap">Color map</label>
+            <select id="cmap">
+              <option value="gray">gray</option>
+              <option value="seismic">blue-white-red</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="modbar"><span class="hint">The panel above stays where it is
+    while the tabs change underneath.</span></div>
+
+  <div class="tab-wrap" id="tabwrap">
+    <div class="tabs">
+      <button aria-controls="pane-what" aria-selected="true">What this does</button>
+      <button aria-controls="pane-open">Open a line</button>
+      <button aria-controls="pane-read">What was read</button>
+      <button aria-controls="pane-next">Before going on</button>
+    </div>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-what" role="tabpanel">
+      <p class="lede">Each step takes the section produced by the step before
+        it, does one thing to it, and shows three panels: what went in, what
+        came out, and the difference between them. The difference panel is
+        where the result is judged. A filter that has removed a coherent
+        reflection shows that reflection in the difference, whatever the output
+        panel looks like.</p>
+
+      <p class="lede">The sequence is amplitude recovery, then f-k separation
+        on dip and frequency, then smoothing along structure, then spectral
+        balancing. After that the section can be measured with attributes and
+        classified. Steps can be skipped; the attribute pages work on whatever
+        stage is furthest along.</p>
+
+      <div class="twothings">
+        <div class="twogrid">
+          <div>
+            <h4>What it will do</h4>
+            <p>Read a 2D poststack SEG-Y file and its headers, restrict the
+              zone, separate components of the image on dip and frequency,
+              smooth along structure, balance the spectrum, compute attributes,
+              and classify them without supervision.</p>
+          </div>
+          <div>
+            <h4>What it will not do</h4>
+            <p>No migration, no velocity analysis, no work on prestack gathers,
+              no 3D. Nothing here changes where an event sits in the section;
+              the position of every reflection is whatever the original
+              processing left.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="miscon">
+        <h4>This is not a denoiser</h4>
+        <p>Every step removes something, and on deep crustal data what it
+          removes is frequently not noise. The tool is built to show what was
+          taken out at each step so that the decision can be made
+          deliberately.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-open" role="tabpanel" hidden>
+      <p class="lede">Three routes. Whichever is used, the samples are read in
+        this browser and kept in browser storage so the later steps can reach
+        them. No file is uploaded.</p>
+
+      <div class="plot-head"><h3><span class="stepno">1</span> A sample line</h3></div>
+      <p class="lede">COCORP Wyoming Line 1 crosses the Wind River thrust: 783
+        traces, 2501 samples, 8 ms sample interval, 20 seconds of record. The
+        synthetic line is small and fast, with events of known dip and
+        frequency put in deliberately.</p>
+      <p>
+        <button class="btn" type="button" id="btnWY">COCORP Wyoming Line 1</button>
+        <button class="btn" type="button" id="btnSyn">Synthetic line</button>
+      </p>
+
+      <div class="plot-head" style="margin-top:22px">
+        <h3><span class="stepno">2</span> A file from disk</h3></div>
+      <p class="lead"></p>
+      <p class="lede">Any 2D poststack SEG-Y. Format codes 1, 2, 3, 5, 6, 8
+        through 12 and 16 are read, in either byte order, with extended text
+        headers skipped.</p>
+      <p><input type="file" id="fileIn" accept=".sgy,.segy,.SGY,.SEGY"></p>
+
+      <div class="plot-head" style="margin-top:22px">
+        <h3><span class="stepno">3</span> Dropped onto the panel</h3></div>
+      <p class="lede">A SEG-Y file dragged onto the section panel above is
+        read the same way.</p>
+
+      <p class="hint" id="loadNote" style="margin-top:16px"></p>
+
+      <div class="leftout">
+        <h4>Very large files</h4>
+        <p>A line with more samples than the browser can hold in one array is
+          read with traces skipped at a regular interval. The number of traces
+          in the file and the number held are both reported on the next tab, so
+          a decimated line is never worked on without that being visible.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-read" role="tabpanel" hidden>
+      <p class="lede" id="readLede">Nothing is loaded yet. Open a line on the
+        previous tab and what the file reports about itself appears here.</p>
+
+      <table class="reqtable" id="readTable" hidden>
+        <thead><tr><th>Quantity</th><th>Value</th><th>Where it comes from</th></tr></thead>
+        <tbody id="readBody"></tbody>
+      </table>
+
+      <div id="readNotes" hidden>
+        <div class="whymatters">
+          <h4>Sample interval and what the file can hold</h4>
+          <p id="nyqNote"></p>
+        </div>
+
+        <div class="whymatters">
+          <h4>What the trace count does not tell you</h4>
+          <p>Trace spacing along the ground is not in the binary header. Until
+            the trace headers are read, the horizontal axis is a trace number
+            and not a distance, so a dip in milliseconds per trace cannot yet
+            be converted to an angle. The next step reads those headers.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-next" role="tabpanel" hidden>
+      <p class="lede">What is worth settling on this section before any
+        filtering is applied to it.</p>
+
+      <div class="check"><p><b>Does the section look like what the file says
+        it is?</b> A record length that disagrees with the panel, or a section
+        that is half blank, usually means the sample count or the format code
+        was read from a field that was filled in wrongly rather than that the
+        data is damaged.</p></div>
+
+      <div class="check"><p><b>Where does the signal stop?</b> Most crustal
+        lines have a depth below which there is nothing but noise. Reading that
+        level off the panel now sets what the later steps can be expected to
+        recover, and what they will be inventing.</p></div>
+
+      <div class="check"><p><b>Is anything already done to the amplitudes?</b>
+        A section whose deep half is as strong as its shallow half has been
+        gained, and that gain is part of the file now. The text header on the
+        next step is where any record of it would be.</p></div>
+
+      <div class="check"><p><b>Is the display flattering the data?</b> The clip
+        control changes how strong every event looks without changing a number.
+        A section at 90 percent clip and the same section at 100 can support
+        different readings.</p></div>
+
+      <div class="check"><p><b>What is the goal for this line?</b> Imaging
+        lower-crustal fabric, following a single reflector, or comparing
+        reflection strength with depth lead to different choices at the
+        amplitude and filtering steps, and the choices are not
+        interchangeable.</p></div>
+    </section>
+  </div>
+
+  <div class="pager">
+    <a class="btn" href="../index.html">&larr; All steps</a>
+    <a class="btn" href="02-headers.html" id="btnNext">What the file says about itself &rarr;</a>
+  </div>
+</div>
+
+<footer>
+  <div class="foot-grid">
+    <p><b>Working with deep reflection data</b><br>
+      Heather Bedle, University of Oklahoma</p>
+    <p class="lic">Text and figures <span class="k">CC BY-SA 4.0</span>.
+      Wyoming Line 1 is COCORP data in the public domain.</p>
+  </div>
+</footer>
+
+<script src="../js/segy.js"></script>
+<script src="../js/dsp.js"></script>
+<script src="../js/display.js"></script>
+<script src="../js/spectrum.js"></script>
+<script src="../js/measure.js"></script>
+<script src="../js/help.js"></script>
+<script src="../js/glossary.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/page.js"></script>
+<script>
+/* ---------------------------------------------------------------
+   Step 1. Read a SEG-Y file, show it, and write it to the store as
+   the raw stage so the later steps have something to work on.
+   --------------------------------------------------------------- */
+
+let SEG = null;
+let SRC = "";          // what was opened, for the caption
+
+function readParams(){
+  return {clip: +$("clip").value, ph: +$("ph").value,
+          vel: +$("vel").value, cmap: $("cmap").value};
+}
+
+function readouts(){
+  const p = readParams();
+  $("clipR").textContent = p.clip + "%";
+  $("phR").textContent   = p.ph + " px";
+  $("velR").textContent  = p.vel > 0 ? p.vel.toFixed(1) + " km/s" : "off";
+}
+
+function redraw(){
+  readouts();
+  const p = readParams();
+  ["cSec","axY"].forEach(id => { $(id).style.height = p.ph + "px"; });
+  DISPLAY_H = Math.max(60, Math.round(p.ph * (window.devicePixelRatio || 1)));
+  if (!SEG) return;
+  const {nx, ns, dt} = SEG;
+  const clip = percentileAbs(SEG.data, p.clip) || 1e-30;
+  draw($("cSec"), SEG.data, nx, ns, -clip, clip, buildLUT(p.cmap));
+  drawYAxis("axY", 0, ns * dt * 1e-6, "two-way time (s)", 1, p.vel > 0 ? p.vel : 0);
+  drawXAxis("axX", 1, nx, "trace");
+}
+
+function fmtSeconds(s){
+  return s >= 1 ? s.toFixed(1) + " s" : (s * 1000).toFixed(0) + " ms";
+}
+
+function fillReadout(){
+  if (!SEG) return;
+  const {nx, ns, dt, fmt, rev, big, ntrFile, step} = SEG;
+  const rec = ns * dt * 1e-6;
+  const nyq = 0.5 / (dt * 1e-6);
+  const rows = [
+    ["Traces in the file", ntrFile, "counted from the file length and the trace length"],
+    ["Traces held", nx + (step > 1 ? " (every " + step + a_ord(step) + " trace)" : ""),
+     step > 1 ? "decimated to fit in memory" : "all of them"],
+    ["Samples per trace", ns, "binary header, checked against the first trace header"],
+    ["Sample interval", (dt / 1000).toFixed(dt % 1000 ? 2 : 0) + " ms", "binary header"],
+    ["Record length", fmtSeconds(rec), "samples multiplied by the sample interval"],
+    ["Nyquist frequency", nyq.toFixed(1) + " Hz", "half the sampling rate"],
+    ["Number format", (FMTNAME[fmt] || "code " + fmt) + " (code " + fmt + ")", "binary header"],
+    ["Byte order", big ? "big-endian" : "little-endian", "inferred from whether the header reads sensibly"],
+    ["SEG-Y revision", rev ? "rev " + rev : "not stated", "binary header"],
+    ["Opened from", SRC, ""]
+  ];
+  $("readBody").innerHTML = rows.map(r =>
+    "<tr><td>" + r[0] + "</td><td>" + r[1] + "</td><td>" + r[2] + "</td></tr>").join("");
+  $("readTable").hidden = false;
+  $("readNotes").hidden = false;
+  $("readLede").textContent = "What this file reports about itself. " +
+    "Fields in a SEG-Y header are filled in by whoever wrote the file, and " +
+    "some of them are routinely wrong; the next step goes through them.";
+  $("nyqNote").textContent =
+    "At " + (dt / 1000).toFixed(dt % 1000 ? 2 : 0) + " ms the file cannot hold anything above " +
+    nyq.toFixed(1) + " Hz. Deep crustal lines are usually recorded at 4 or 8 ms because the " +
+    "returning energy is low frequency by the time it has traveled through 40 km of crust and " +
+    "back. Any filter corner or balancing band set later has that ceiling above it.";
+  glossaryScan($("pane-read"));
+}
+
+function a_ord(n){
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return "th";
+  return {1:"st", 2:"nd", 3:"rd"}[n % 10] || "th";
+}
+
+function note(msg, bad){
+  const el = $("loadNote");
+  el.textContent = msg;
+  el.style.color = bad ? "var(--crimson)" : "var(--slate)";
+}
+
+function useSegy(seg, src){
+  SEG = seg; SRC = src;
+  $("secTitle").textContent = src;
+  $("unitLine").textContent =
+    seg.nx + " traces, " + seg.ns + " samples, " + (seg.dt / 1000) + " ms";
+  redraw();
+  fillReadout();
+
+  const section = {data: seg.data, nx: seg.nx, ns: seg.ns, dt: seg.dt, j0: 0};
+  // the original bytes travel with the stage so that the header step can read
+  // the trace headers without asking for the file again
+  const meta = {name: src, fmt: seg.fmt, rev: seg.rev, big: seg.big,
+                ntrFile: seg.ntrFile, step: seg.step,
+                textual: seg.textual, bytes: seg.bytes || null};
+  stageSave("raw", section, meta)
+    .then(() => stageDropAfter("raw"))
+    .then(() => note("Loaded and saved. Anything done to a previous line in the later steps has been cleared."))
+    .catch(e => note("Loaded, but browser storage refused it (" + e.message +
+                     "), so the later steps will not see it. Private browsing usually causes this.", true));
+}
+
+function openBuffer(ab, src){
+  let seg;
+  try { seg = parseSegy(ab); }
+  catch (e){ note("That file could not be read: " + e.message, true); return; }
+  seg.bytes = ab;
+  useSegy(seg, src);
+}
+
+function openFile(f){
+  note("Reading " + f.name + "\u2026");
+  f.arrayBuffer().then(ab => openBuffer(ab, f.name))
+                 .catch(e => note("That file could not be read: " + e.message, true));
+}
+
+function openSample(url, label){
+  note("Reading " + label + "\u2026");
+  fetch(url)
+    .then(r => { if (!r.ok) throw new Error(r.status + " " + r.statusText); return r.arrayBuffer(); })
+    .then(ab => openBuffer(ab, label))
+    .catch(e => note("The sample line did not load: " + e.message, true));
+}
+
+pageReady(() => {
+  readouts();
+  setupTabs($("tabwrap"), () => stackSticky());
+
+  ["clip","ph","vel","cmap"].forEach(id => $(id).addEventListener("input", redraw));
+  window.addEventListener("resize", redraw);
+
+  $("btnWY").addEventListener("click", () =>
+    openSample("../data/COCORP_WY01_coherency.sgy", "COCORP Wyoming Line 1"));
+  $("btnSyn").addEventListener("click", () =>
+    openSample("../data/synthetic_2d_line.sgy", "Synthetic line"));
+  $("fileIn").addEventListener("change", e => {
+    if (e.target.files && e.target.files[0]) openFile(e.target.files[0]);
+  });
+
+  const drop = $("panelrow");
+  ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.style.outline = "2px solid var(--crimson)";
+  }));
+  ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.style.outline = "";
+  }));
+  drop.addEventListener("drop", e => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) openFile(f);
+  });
+
+  $("btnPop").addEventListener("click", e => {
+    e.preventDefault(); popOut("cSec", SRC || "Section");
+  });
+
+  pageChrome();
+
+  // a line already in the store is shown rather than asking for it again
+  stageLoad("raw").then(r => {
+    if (!r) return;
+    SRC = (r.meta && r.meta.name) || "the line already loaded";
+    SEG = {data: r.data, nx: r.nx, ns: r.ns, dt: r.dt,
+           fmt: (r.meta && r.meta.fmt) || 0, rev: (r.meta && r.meta.rev) || 0,
+           big: !(r.meta && r.meta.big === false),
+           ntrFile: (r.meta && r.meta.ntrFile) || r.nx,
+           step: (r.meta && r.meta.step) || 1};
+    $("secTitle").textContent = SRC;
+    $("unitLine").textContent = SEG.nx + " traces, " + SEG.ns + " samples, " + (SEG.dt / 1000) + " ms";
+    redraw(); fillReadout();
+    note("This line is already loaded. Opening another one replaces it.");
+  }).catch(() => {});
+});
+</script>
+<script src="../assets/count.js"></script>
+</body>
+</html>
