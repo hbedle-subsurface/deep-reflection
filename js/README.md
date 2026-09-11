@@ -55,6 +55,20 @@ where a strip 66 pixels wide has room for none of them. Where the range crosses
 zero the zero is marked, which is the reading on any diverging quantity — dip,
 the amplitude volume transform, relative impedance.
 
+`blitField` sizes a section bitmap to the box the canvas occupies rather than
+to the shape of the data. The bitmap used to be nx by nz with the height set in
+CSS, which looks right on the page and falls apart the moment the canvas is
+copied into another window, where the copy is sized by its own aspect ratio.
+
+`displayGain` applies t^n or AGC to a copy used for drawing. It is display
+only; the step that puts gain into the data is separate. Without it a line that
+has never been gained shows an empty lower half, which is the first thing
+somebody screening a legacy line needs to get past.
+
+`reverseLUT`, `CMAP_LABEL`, `CMAP_DIVERGING` and `CMAP_SEQUENTIAL` drive the
+color-map controls. Reversing polarity is done by swapping the two ends of the
+scale passed to the drawing routine, so the samples are untouched.
+
 `savePanelPNG` writes the panels at the resolution they were drawn at rather
 than the size they are displayed. `stateRead` and `stateWrite` keep the control
 settings in the address bar so a particular setup can be handed over as a link;

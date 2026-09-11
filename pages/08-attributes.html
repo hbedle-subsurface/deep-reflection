@@ -59,12 +59,19 @@
         <div class="ctl-col">
           <div class="ctl">
             <label for="cmap">Attribute color map</label>
-            <select id="cmap">
-              <option value="magma">magma</option>
-              <option value="viridis">viridis</option>
-              <option value="gray">gray</option>
-              <option value="seismic">blue-white-red</option>
-            </select>
+            <select id="cmap"></select>
+          </div>
+          <div class="check">
+            <input type="checkbox" id="cmapRev">
+            <label for="cmapRev" style="margin:0">Read the map the other way</label>
+          </div>
+          <div class="ctl">
+            <label>Amplitude polarity</label>
+            <input type="hidden" id="pol" value="1">
+            <div class="seg" id="polSeg">
+              <button type="button" data-v="1" aria-pressed="true">SEG normal</button>
+              <button type="button" data-v="-1" aria-pressed="false">Reverse</button>
+            </div>
           </div>
           <div class="ctl">
             <label for="clip">Amplitude clip <span class="readout" id="clipR">98%</span></label>
@@ -330,8 +337,43 @@ let KEY = "avt";
 let RELZ_TOUCHED = false;   // relief height is measured until the slider is moved
 
 /* every control whose setting belongs in a shared link */
-const CONTROLS = ["cmap","clip","ph","vel","attrWin","attrWinI","attrFc",
-                  "attrDl","relAz","relAlt","relZ","relSm","relSurf"];
+const CONTROLS = ["cmap","cmapRev","pol","clip","ph","vel","attrWin",
+                  "attrWinI","attrFc","attrDl","relAz","relAlt","relZ",
+                  "relSm","relSurf"];
+let POL = 1;            // 1 is SEG normal, -1 draws a peak as a trough
+
+/* An attribute that straddles zero needs a map with a neutral middle; one that
+   is never negative does not, and a diverging map on it wastes half the scale.
+   The list offered follows whichever the current attribute is. */
+function cmapChoices(){
+  return (RES && RES.vmin < 0 && RES.vmax > 0) ? CMAP_DIVERGING : CMAP_SEQUENTIAL;
+}
+
+function fillCmaps(){
+  const sel = $("cmap"), keep = sel.value;
+  const list = cmapChoices();
+  sel.innerHTML = list.map(k =>
+    '<option value="' + k + '">' + CMAP_LABEL[k] + '</option>').join("");
+  sel.value = list.indexOf(keep) >= 0 ? keep
+            : (RES && list.indexOf(RES.cmapDefault) >= 0 ? RES.cmapDefault : list[0]);
+}
+
+/* A row of buttons behaving as one control. The value lives in a hidden input
+   so that it travels in the shared link with everything else, and so that a
+   link carrying it sets the buttons on the way in. */
+function segControl(segId, inputId, onPick){
+  const el = $(inputId);
+  const paint = () => $(segId).querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.v === el.value ? "true" : "false"));
+  $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    el.value = b.dataset.v;
+    paint();
+    stateWrite(CONTROLS);
+    onPick(el.value);
+  }));
+  paint();
+  onPick(el.value);
+}
 let RES = null;
 
 const PANE_GROUP = {"pane-amp":"amp", "pane-freq":"freq",
@@ -345,6 +387,7 @@ function readParams(){
     attrFc:   n("attrFc"),
     attrDl:   n("attrDl"),
     cmap:     $("cmap").value,
+    rev:      $("cmapRev").checked,
     relSurf:  $("relSurf").value,
     relAz:    n("relAz"),
     relAlt:   n("relAlt"),
@@ -443,10 +486,11 @@ function draw_all(){
   // amplitude panel, always gray, clipped at a percentile so a few large
   // samples do not compress everything else into the middle of the scale
   const clip = percentileAbs(SEC.data, p.clip) || 1e-30;
-  draw($("cAmp"), SEC.data, nx, ns, -clip, clip, buildLUT("gray"));
+  draw($("cAmp"), SEC.data, nx, ns, POL * -clip, POL * clip, buildLUT("gray"));
 
   if (!RES){ return; }
   $("attrTitle").textContent = RES.title;
+  fillCmaps();
   $("unitLine").textContent = RES.unit || "";
 
   if (RES.rgb){
@@ -455,7 +499,8 @@ function draw_all(){
     // panel already names the three frequencies
     fitCanvas($("cbar"));
   } else {
-    const lut = buildLUT(p.cmap === "gray" && RES.cmapDefault ? RES.cmapDefault : p.cmap);
+    const base = buildLUT(p.cmap || RES.cmapDefault);
+    const lut = p.rev ? reverseLUT(base) : base;
     drawRange($("cAttr"), RES.a, nx, ns, RES.vmin, RES.vmax, lut);
     drawColorbarH("cbar", RES.vmin, RES.vmax, lut, RES.title, RES.cbLabel || "");
   }
@@ -489,6 +534,7 @@ function useSection(sec, from){
 
 pageReady(() => {
   buildPickers();
+  fillCmaps();
   syncPickers();
   readouts();
 
@@ -509,6 +555,7 @@ pageReady(() => {
       recompute();
     });
   });
+  segControl("polSeg", "pol", v => { POL = +v; draw_all(); });
   linkWindows("attrWin2", "attrWin");
   linkWindows("attrWin", "attrWin2");
 

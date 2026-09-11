@@ -29,6 +29,87 @@ const CMAPS = {
             [172,142,42],[223,160,88],[250,191,158],[250,204,250]]
 };
 
+/* Put a field on a canvas at the size the canvas is displayed at, rather than
+   at the size of the data.
+
+   The bitmap used to be nx by nz, and the page set the height in CSS, so the
+   two axes were stretched independently and it looked right. A copy of the
+   canvas in another window is sized by its own aspect ratio, and the data
+   aspect is nothing like the display aspect: 1561 traces by 400 rows drew four
+   times too wide and the axis beside it no longer lined up. Sizing the bitmap
+   to the box the canvas occupies makes the shape survive being copied. */
+function blitField(canvas, img, nx, nz){
+  const r = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(2, Math.round((r.width  > 4 ? r.width  : nx) * dpr));
+  const h = Math.max(2, Math.round((r.height > 4 ? r.height : nz) * dpr));
+  const tmp = document.createElement("canvas");
+  tmp.width = nx; tmp.height = nz;
+  tmp.getContext("2d").putImageData(img, 0, 0);
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = "high";
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(tmp, 0, 0, nx, nz, 0, 0, w, h);
+}
+
+/* Display gain. This changes the picture and not the samples: the array handed
+   back is a copy used for drawing, and nothing downstream sees it. The step
+   that puts gain into the data is separate and says so.
+
+   mode "tpow" multiplies by time raised to a power, one smooth known curve
+   that keeps the amplitude of two events at the same time in proportion.
+   mode "agc" divides by a running measure of amplitude, which makes everything
+   visible and removes any comparison between shallow and deep. */
+function displayGain(d, nx, ns, dt, j0, mode, tpow, agcMs){
+  if (mode === "agc"){
+    const half = Math.max(1, Math.round(agcMs / 2 / (dt * 1e-3)));
+    const g = agcField(d, nx, ns, half);
+    const o = new Float32Array(d.length);
+    for (let k = 0; k < d.length; k++) o[k] = d[k] * g[k];
+    return o;
+  }
+  if (mode === "tpow" && tpow > 0){
+    const o = new Float32Array(d.length);
+    const t0 = (j0 || 0) * dt * 1e-6, dts = dt * 1e-6;
+    for (let j = 0; j < ns; j++){
+      const g = Math.pow(Math.max(t0 + j * dts, dts), tpow);
+      for (let i = 0; i < nx; i++) o[i*ns+j] = d[i*ns+j] * g;
+    }
+    return o;
+  }
+  return d;
+}
+
+/* A color map read the other way round. Kept separate from buildLUT so the
+   table itself is built once and only the order changes. */
+function reverseLUT(lut){
+  const out = new Uint8Array(lut.length);
+  for (let k = 0; k < 512; k++){
+    const s = (511 - k) * 3, o = k * 3;
+    out[o] = lut[s]; out[o+1] = lut[s+1]; out[o+2] = lut[s+2];
+  }
+  return out;
+}
+
+/* What each map is called in a control, and which are appropriate for a
+   quantity that straddles zero. */
+const CMAP_LABEL = {
+  gray:    "gray, white peaks",
+  graygb:  "gray, black peaks",
+  seis:    "blue / black / red",
+  bwr:     "blue / white / red",
+  coolwarm:"cool to warm",
+  vik:     "vik, blue to brown",
+  magma:   "magma",
+  viridis: "viridis",
+  cividis: "cividis",
+  batlow:  "batlow"
+};
+const CMAP_DIVERGING = ["gray", "graygb", "seis", "bwr", "coolwarm", "vik"];
+const CMAP_SEQUENTIAL = ["gray", "graygb", "magma", "viridis", "cividis", "batlow"];
+
 function buildLUT(name){
   const cp = CMAPS[name] || CMAPS.gray;
   const lut = new Uint8ClampedArray(512*3);
@@ -46,9 +127,7 @@ const buildALUT = buildLUT;   // one table now; kept for call sites
 function drawRGB(canvas, ch, sc, nx, nz0){
   const nz = Math.min(nz0, DISPLAY_H > 0 ? DISPLAY_H : nz0);
   ch = ch.map(c => reduceTime(c, nx, nz0, nz, "mean").a);
-  canvas.width = nx; canvas.height = nz;
-  const ctx = canvas.getContext("2d");
-  const img = ctx.createImageData(nx, nz), px = img.data;
+  const img = canvas.getContext("2d").createImageData(nx, nz), px = img.data;
   const inv = sc.map(v => 255 / (v || 1e-30));
   for (let i=0;i<nx;i++) for (let j=0;j<nz;j++){
     const k = i*nz+j, o = (j*nx+i)*4;
@@ -58,15 +137,13 @@ function drawRGB(canvas, ch, sc, nx, nz0){
     }
     px[o+3] = 255;
   }
-  ctx.putImageData(img,0,0);
+  blitField(canvas, img, nx, nz);
 }
 
 function drawRange(canvas, a, nx, nz0, vmin, vmax, lut){
   const R = reduceTime(a, nx, nz0, DISPLAY_H, "mean");
   a = R.a; const nz = R.nz;
-  canvas.width = nx; canvas.height = nz;
-  const ctx = canvas.getContext("2d");
-  const img = ctx.createImageData(nx, nz), px = img.data;
+  const img = canvas.getContext("2d").createImageData(nx, nz), px = img.data;
   const sc = 511 / ((vmax - vmin) || 1e-30);
   for (let i=0;i<nx;i++) for (let j=0;j<nz;j++){
     let t = (a[i*nz+j] - vmin) * sc;
@@ -74,7 +151,7 @@ function drawRange(canvas, a, nx, nz0, vmin, vmax, lut){
     const o = (j*nx+i)*4;
     px[o]=lut[t*3]; px[o+1]=lut[t*3+1]; px[o+2]=lut[t*3+2]; px[o+3]=255;
   }
-  ctx.putImageData(img,0,0);
+  blitField(canvas, img, nx, nz);
 }
 
 function reduceTime(a, nx, nz, H, mode){
@@ -122,9 +199,7 @@ function percentileAbs(d, p){
 function draw(canvas, d, nx, nz0, lo, hi, lut){
   const R = reduceTime(d, nx, nz0, DISPLAY_H, "peak");
   d = R.a; const nz = R.nz;
-  canvas.width = nx; canvas.height = nz;
-  const ctx = canvas.getContext("2d");
-  const img = ctx.createImageData(nx, nz);
+  const img = canvas.getContext("2d").createImageData(nx, nz);
   const px = img.data;
   const sc = 511/((hi - lo) || 1e-30);
   for (let i=0;i<nx;i++){
@@ -135,7 +210,7 @@ function draw(canvas, d, nx, nz0, lo, hi, lut){
       px[o]=lut[idx*3]; px[o+1]=lut[idx*3+1]; px[o+2]=lut[idx*3+2]; px[o+3]=255;
     }
   }
-  ctx.putImageData(img,0,0);
+  blitField(canvas, img, nx, nz);
 }
 
 function drawFK(cv, p, nx, nz, dt){

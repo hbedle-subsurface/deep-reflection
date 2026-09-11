@@ -66,11 +66,40 @@
           </div>
           <div class="ctl">
             <label for="cmap">Color map</label>
-            <select id="cmap">
-              <option value="gray">gray</option>
-              <option value="seismic">blue-white-red</option>
-            </select>
+            <select id="cmap"></select>
           </div>
+          <div class="check">
+            <input type="checkbox" id="cmapRev">
+            <label for="cmapRev" style="margin:0">Read the map the other way</label>
+          </div>
+          <div class="ctl">
+            <label>Polarity</label>
+            <input type="hidden" id="pol" value="1">
+            <div class="seg" id="polSeg">
+              <button type="button" data-v="1" aria-pressed="true">SEG normal</button>
+              <button type="button" data-v="-1" aria-pressed="false">Reverse</button>
+            </div>
+          </div>
+
+          <h2 style="margin-top:18px">Gain, for the display only</h2>
+          <div class="ctl">
+            <label>Applied</label>
+            <input type="hidden" id="gain" value="none">
+            <div class="seg" id="gainSeg">
+              <button type="button" data-v="none" aria-pressed="true">None</button>
+              <button type="button" data-v="tpow" aria-pressed="false">t&#8319;</button>
+              <button type="button" data-v="agc" aria-pressed="false">AGC</button>
+            </div>
+          </div>
+          <div class="ctl" id="tpowCtl" hidden>
+            <label for="tpow">Exponent n <span class="readout" id="tpowR">1.5</span></label>
+            <input type="range" id="tpow" min="0" max="4" step="0.1" value="1.5">
+          </div>
+          <div class="ctl" id="agcCtl" hidden>
+            <label for="agcWin">Window <span class="readout" id="agcWinR">500 ms</span></label>
+            <input type="range" id="agcWin" min="100" max="3000" step="50" value="500">
+          </div>
+          <p class="hint" id="gainNote" style="margin:.3rem 0 0"></p>
         </div>
       </div>
     </div>
@@ -271,11 +300,15 @@ let SEG = null;
 let SRC = "";          // what was opened, for the caption
 
 /* every control whose setting belongs in a shared link */
-const CONTROLS = ["clip", "ph", "vel", "cmap"];
+const CONTROLS = ["clip", "ph", "vel", "cmap", "cmapRev", "pol", "gain",
+                  "tpow", "agcWin"];
+let POL = 1;            // 1 is SEG normal, -1 draws a peak as a trough
+let GAIN = "none";      // display only; the data path is step 4
 
 function readParams(){
-  return {clip: +$("clip").value, ph: +$("ph").value,
-          vel: +$("vel").value, cmap: $("cmap").value};
+  return {clip: +$("clip").value, ph: +$("ph").value, vel: +$("vel").value,
+          cmap: $("cmap").value, rev: $("cmapRev").checked,
+          tpow: +$("tpow").value, agcWin: +$("agcWin").value};
 }
 
 function readouts(){
@@ -283,6 +316,14 @@ function readouts(){
   $("clipR").textContent = p.clip + "%";
   $("phR").textContent   = panelHeight(p.ph) + " px";
   $("velR").textContent  = p.vel > 0 ? p.vel.toFixed(1) + " km/s" : "off";
+  $("tpowR").textContent = p.tpow.toFixed(1);
+  $("agcWinR").textContent = p.agcWin + " ms";
+  $("tpowCtl").hidden = GAIN !== "tpow";
+  $("agcCtl").hidden  = GAIN !== "agc";
+  $("gainNote").textContent =
+    GAIN === "none" ? "The section as the file holds it. On a line with no gain already applied, the deep half will look empty."
+  : GAIN === "tpow" ? "One curve over the whole record, so two events at the same time keep their relative amplitude."
+  : "Everything is brought to the same level, which makes the deep half visible and ends any comparison of strength with depth.";
 }
 
 function redraw(){
@@ -293,8 +334,12 @@ function redraw(){
   DISPLAY_H = Math.max(60, Math.round(panelHeight(p.ph) * (window.devicePixelRatio || 1)));
   if (!SEG) return;
   const {nx, ns, dt} = SEG;
-  const clip = percentileAbs(SEG.data, p.clip) || 1e-30;
-  draw($("cSec"), SEG.data, nx, ns, -clip, clip, buildLUT(p.cmap));
+  const shown = displayGain(SEG.data, nx, ns, dt, SEG.j0 || 0, GAIN, p.tpow, p.agcWin);
+  const clip = percentileAbs(shown, p.clip) || 1e-30;
+  const lut = p.rev ? reverseLUT(buildLUT(p.cmap)) : buildLUT(p.cmap);
+  // reversing polarity swaps the two ends of the scale rather than touching
+  // the samples, so nothing downstream of the display sees it
+  draw($("cSec"), shown, nx, ns, POL * -clip, POL * clip, lut);
   drawYAxis("axY", 0, ns * dt * 1e-6, "two-way time (s)", 1, p.vel > 0 ? p.vel : 0);
   drawXAxis("axX", 1, nx, "trace");
 }
@@ -391,7 +436,33 @@ function openSample(url, label){
     .catch(e => note("The sample line did not load: " + e.message, true));
 }
 
+/* the maps are listed from the table in display.js rather than written out
+   here, so a map added there appears in every page's control */
+function fillCmaps(){
+  const sel = $("cmap");
+  sel.innerHTML = CMAP_DIVERGING.map(k =>
+    '<option value="' + k + '">' + CMAP_LABEL[k] + '</option>').join("");
+}
+
+/* A row of buttons behaving as one control. The value lives in a hidden input
+   so that it travels in the shared link with everything else, and so that a
+   link carrying it sets the buttons on the way in. */
+function segControl(segId, inputId, onPick){
+  const el = $(inputId);
+  const paint = () => $(segId).querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.v === el.value ? "true" : "false"));
+  $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    el.value = b.dataset.v;
+    paint();
+    stateWrite(CONTROLS);
+    onPick(el.value);
+  }));
+  paint();
+  onPick(el.value);
+}
+
 pageReady(() => {
+  fillCmaps();
   stateWrite(stateRead(CONTROLS));
   readouts();
   setupTabs($("tabwrap"), () => stackSticky());
@@ -399,6 +470,8 @@ pageReady(() => {
   CONTROLS.forEach(id => $(id).addEventListener("input", () => {
     stateWrite(CONTROLS); redraw();
   }));
+  segControl("polSeg", "pol", v => { POL = +v; redraw(); });
+  segControl("gainSeg", "gain", v => { GAIN = v; redraw(); });
   window.addEventListener("resize", () => { redraw(); stackSticky(); });
 
   $("btnWY").addEventListener("click", () =>
