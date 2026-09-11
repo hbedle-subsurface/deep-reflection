@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A line to work on — Working with deep reflection data</title>
+<title>Open a line — Working with deep reflection data</title>
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="stylesheet" href="../assets/glossary.css">
 <link rel="stylesheet" href="../assets/page.css">
@@ -21,11 +21,11 @@
   </header>
 
   <div class="mod-head">
-    <p class="eyebrow">Step 1 of 11</p>
-    <h1>A line to work on</h1>
-    <p class="sub">Every later step works on what is loaded here. Two sample
-      lines are included, and any 2D poststack SEG-Y file can be opened
-      instead. The file is read in the browser and is not sent anywhere.</p>
+    <p class="eyebrow">Step 1 of 9</p>
+    <h1>Open a line</h1>
+    <p class="sub">Read a 2D poststack SEG-Y, look at what its headers claim,
+      and cut the line down to the part worth working on. Everything after this
+      step runs on what is set here.</p>
   </div>
 </div>
 
@@ -33,19 +33,17 @@
   <div class="wrap">
     <div class="labgrid">
       <div>
-        <p class="cap">The line as it was read
-          <span>&mdash; nothing has been done to it yet</span></p>
-        <div class="panelrow" id="panelrow" style="grid-template-columns:54px minmax(0,1fr) 66px">
+        <p class="cap"><span id="capLine">No line open</span>
+          <span id="capNote"></span></p>
+        <div class="panelrow" id="panelrow" style="grid-template-columns:54px minmax(0,1fr)">
           <canvas class="axY" id="axY"></canvas>
           <figure>
-            <figcaption><span id="secTitle">No line loaded</span></figcaption>
             <canvas class="sect" id="cSec"></canvas>
           </figure>
-          <span></span>
           <p class="unitline" id="unitLine" style="grid-column:2 / 3"></p>
         </div>
-        <div class="axXrow" style="grid-template-columns:54px minmax(0,1fr) 66px">
-          <span></span><canvas id="axX"></canvas><span></span>
+        <div class="axXrow" style="grid-template-columns:54px minmax(0,1fr)">
+          <span></span><canvas id="axX"></canvas>
         </div>
       </div>
 
@@ -61,10 +59,6 @@
             <input type="range" id="ph" min="240" max="900" step="20" value="380">
           </div>
           <div class="ctl">
-            <label for="vel">Depth scale <span class="readout" id="velR">off</span></label>
-            <input type="range" id="vel" min="0" max="8" step="0.5" value="0">
-          </div>
-          <div class="ctl">
             <label for="cmap">Color map</label>
             <select id="cmap"></select>
           </div>
@@ -76,19 +70,22 @@
             <label>Polarity</label>
             <input type="hidden" id="pol" value="1">
             <div class="seg" id="polSeg">
-              <button type="button" data-v="1" aria-pressed="true">SEG normal</button>
-              <button type="button" data-v="-1" aria-pressed="false">Reverse</button>
+              <button type="button" data-v="1">SEG normal</button>
+              <button type="button" data-v="-1">Reverse</button>
             </div>
           </div>
-
-          <h2 style="margin-top:18px">Gain, for the display only</h2>
           <div class="ctl">
-            <label>Applied</label>
+            <label for="vel">Depth scale <span class="readout" id="velR">off</span></label>
+            <input type="range" id="vel" min="0" max="8" step="0.5" value="0">
+          </div>
+
+          <h2>Gain, for the display only</h2>
+          <div class="ctl">
             <input type="hidden" id="gain" value="none">
             <div class="seg" id="gainSeg">
-              <button type="button" data-v="none" aria-pressed="true">None</button>
-              <button type="button" data-v="tpow" aria-pressed="false">t&#8319;</button>
-              <button type="button" data-v="agc" aria-pressed="false">AGC</button>
+              <button type="button" data-v="none">None</button>
+              <button type="button" data-v="tpow">t&#8319;</button>
+              <button type="button" data-v="agc">AGC</button>
             </div>
           </div>
           <div class="ctl" id="tpowCtl" hidden>
@@ -116,158 +113,206 @@
 
   <div class="tab-wrap" id="tabwrap">
     <div class="tabs">
-      <button aria-controls="pane-what" aria-selected="true">What this does</button>
-      <button aria-controls="pane-open">Open a line</button>
-      <button aria-controls="pane-read">What was read</button>
+      <button aria-controls="pane-open" aria-selected="true">Open a line</button>
+      <button aria-controls="pane-segy">SEG-Y header</button>
+      <button aria-controls="pane-trace">Trace headers</button>
+      <button aria-controls="pane-crop">Crop</button>
       <button aria-controls="pane-next">Before going on</button>
     </div>
 
     <!-- ------------------------------------------------------------ -->
-    <section class="tabpane" id="pane-what" role="tabpanel">
-      <p class="lede">Each step takes the section produced by the step before
-        it, does one thing to it, and shows three panels: what went in, what
-        came out, and the difference between them. The difference panel is
-        where the result is judged. A filter that has removed a coherent
-        reflection shows that reflection in the difference, whatever the output
-        panel looks like.</p>
-
-      <p class="lede">The sequence is amplitude recovery, then f-k separation
-        on dip and frequency, then smoothing along structure, then spectral
-        balancing. After that the section can be measured with attributes and
-        classified. Steps can be skipped; the attribute pages work on whatever
-        stage is furthest along.</p>
-
-      <div class="twothings">
-        <div class="twogrid">
-          <div>
-            <h4>What it will do</h4>
-            <p>Read a 2D poststack SEG-Y file and its headers, restrict the
-              zone, separate components of the image on dip and frequency,
-              smooth along structure, balance the spectrum, compute attributes,
-              and classify them without supervision.</p>
-          </div>
-          <div>
-            <h4>What it will not do</h4>
-            <p>No migration, no velocity analysis, no work on prestack gathers,
-              no 3D. Nothing here changes where an event sits in the section;
-              the position of every reflection is whatever the original
-              processing left.</p>
-          </div>
+    <section class="tabpane" id="pane-open" role="tabpanel">
+      <div class="card-grid" style="gap:20px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+        <div>
+          <div class="plot-head"><h3>Sample lines</h3></div>
+          <p class="lede">COCORP Wyoming Line 1 crosses the Wind River thrust:
+            783 traces, 2501 samples, 8 ms, 20 seconds of record. The synthetic
+            line is small and fast, with events of known dip and frequency put
+            in deliberately.</p>
+          <p>
+            <button class="btn" type="button" id="btnWY">Wyoming Line 1</button>
+            <button class="btn" type="button" id="btnSyn">Synthetic line</button>
+          </p>
+        </div>
+        <div>
+          <div class="plot-head"><h3>A file from disk</h3></div>
+          <p class="lede">Any 2D poststack SEG-Y, in either byte order, format
+            codes 1, 2, 3, 5, 6, 8 through 12 and 16. Extended text headers are
+            skipped. Dropping a file on the panel above does the same thing.</p>
+          <p><input type="file" id="fileIn" accept=".sgy,.segy,.SGY,.SEGY,.bin,.sgd"></p>
+          <p class="hint">The file is read in this browser. Nothing is
+            uploaded.</p>
         </div>
       </div>
 
-      <div class="miscon">
-        <h4>This is not a denoiser</h4>
-        <p>Every step removes something, and on deep crustal data what it
-          removes is frequently not noise. The tool is built to show what was
-          taken out at each step so that the decision can be made
-          deliberately.</p>
-      </div>
-    </section>
+      <p class="hint" id="loadNote" style="margin-top:14px"></p>
 
-    <!-- ------------------------------------------------------------ -->
-    <section class="tabpane" id="pane-open" role="tabpanel" hidden>
-      <p class="lede">Three routes. Whichever is used, the samples are read in
-        this browser and kept in browser storage so the later steps can reach
-        them. No file is uploaded.</p>
-
-      <div class="plot-head"><h3><span class="stepno">1</span> A sample line</h3></div>
-      <p class="lede">COCORP Wyoming Line 1 crosses the Wind River thrust: 783
-        traces, 2501 samples, 8 ms sample interval, 20 seconds of record. The
-        synthetic line is small and fast, with events of known dip and
-        frequency put in deliberately.</p>
-      <p>
-        <button class="btn" type="button" id="btnWY">COCORP Wyoming Line 1</button>
-        <button class="btn" type="button" id="btnSyn">Synthetic line</button>
-      </p>
-
-      <div class="plot-head" style="margin-top:22px">
-        <h3><span class="stepno">2</span> A file from disk</h3></div>
-      <p class="lead"></p>
-      <p class="lede">Any 2D poststack SEG-Y. Format codes 1, 2, 3, 5, 6, 8
-        through 12 and 16 are read, in either byte order, with extended text
-        headers skipped.</p>
-      <p><input type="file" id="fileIn" accept=".sgy,.segy,.SGY,.SEGY"></p>
-
-      <div class="plot-head" style="margin-top:22px">
-        <h3><span class="stepno">3</span> Dropped onto the panel</h3></div>
-      <p class="lede">A SEG-Y file dragged onto the section panel above is
-        read the same way.</p>
-
-      <p class="hint" id="loadNote" style="margin-top:16px"></p>
-
-      <div class="leftout">
-        <h4>Very large files</h4>
-        <p>A line with more samples than the browser can hold in one array is
-          read with traces skipped at a regular interval. The number of traces
-          in the file and the number held are both reported on the next tab, so
-          a decimated line is never worked on without that being visible.</p>
-      </div>
-    </section>
-
-    <!-- ------------------------------------------------------------ -->
-    <section class="tabpane" id="pane-read" role="tabpanel" hidden>
-      <p class="lede" id="readLede">Nothing is loaded yet. Open a line on the
-        previous tab and what the file reports about itself appears here.</p>
-
-      <table class="reqtable" id="readTable" hidden>
-        <thead><tr><th>Quantity</th><th>Value</th><th>Where it comes from</th></tr></thead>
-        <tbody id="readBody"></tbody>
+      <table class="reqtable" id="ovTable" hidden>
+        <thead><tr><th>What was read</th><th>Value</th><th>From</th></tr></thead>
+        <tbody id="ovBody"></tbody>
       </table>
 
-      <div id="readNotes" hidden>
-        <div class="whymatters">
-          <h4>Sample interval and what the file can hold</h4>
-          <p id="nyqNote"></p>
+      <div class="whymatters">
+        <h4>What this tool does with it</h4>
+        <p>Each later step takes the section the step before it produced, does
+          one thing to it, and shows what it kept beside what it removed.
+          Amplitude recovery, then f-k separation on dip and frequency, then
+          smoothing along structure, then spectral balancing. After that the
+          section can be measured with attributes and classified. Steps can be
+          skipped, and the attribute pages work on whichever stage is furthest
+          along.</p>
+        <p>No migration, no velocity analysis, no prestack gathers, no 3D.
+          Nothing here moves an event: where every reflection sits is whatever
+          the original processing left.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-segy" role="tabpanel" hidden>
+      <p class="lede" id="segyLede">Open a line and its headers appear
+        here.</p>
+
+      <div id="segyBody" hidden>
+        <div class="plot-head"><h3>Text header</h3>
+          <span class="hint" id="txtNote"></span></div>
+        <p class="lede">3200 characters, free text, written by whoever
+          processed the line. Usually the only record of the processing
+          sequence, the datum and the units. Bytes that are not printable are
+          shown as a dot.</p>
+        <pre id="txtHdr" class="no-gloss" style="font-family:var(--mono);font-size:11.5px;
+             line-height:1.45;background:var(--fill);border:1px solid var(--rule);
+             padding:12px 14px;overflow-x:auto;white-space:pre"></pre>
+
+        <div class="plot-head" style="margin-top:24px"><h3>Binary header</h3>
+          <span class="hint">Byte positions as the standard gives them: one-based and inclusive.</span></div>
+        <table class="reqtable">
+          <thead><tr><th>Bytes</th><th>Field</th><th>Value</th><th>Meaning</th></tr></thead>
+          <tbody id="binBody"></tbody>
+        </table>
+        <div class="check" style="margin-top:6px">
+          <input type="checkbox" id="binAll">
+          <label for="binAll" style="margin:0">Include fields left at zero</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-trace" role="tabpanel" hidden>
+      <p class="lede" id="trLede">Open a line and its trace headers appear
+        here.</p>
+
+      <div id="trBody" hidden>
+        <p class="lede">240 bytes in front of every trace. On a line nobody has
+          worked with, the thing to establish is which fields were filled in at
+          all. A field that is zero on every trace was never written, and
+          nothing recovers what it would have said.</p>
+
+        <div class="plot-head"><h3>Across the line</h3>
+          <span class="hint" id="trScan"></span></div>
+        <table class="reqtable">
+          <thead><tr><th>Bytes</th><th>Field</th><th>Range over the line</th>
+            <th>Traces with a value</th></tr></thead>
+          <tbody id="trSumBody"></tbody>
+        </table>
+        <div class="check" style="margin-top:6px">
+          <input type="checkbox" id="trAll">
+          <label for="trAll" style="margin:0">Include fields zero on every trace</label>
         </div>
 
-        <div class="whymatters">
-          <h4>What the trace count does not tell you</h4>
-          <p>Trace spacing along the ground is not in the binary header. Until
-            the trace headers are read, the horizontal axis is a trace number
-            and not a distance, so a dip in milliseconds per trace cannot yet
-            be converted to an angle. The next step reads those headers.</p>
+        <div class="miscon" id="trGaps" hidden>
+          <h4>Not in this file</h4>
+          <p id="trGapsText"></p>
         </div>
+
+        <div class="plot-head" style="margin-top:24px"><h3>One trace</h3></div>
+        <div class="ctl" style="max-width:340px">
+          <label for="trPick">Trace in the file
+            <span class="readout" id="trPickR">1</span></label>
+          <input type="range" id="trPick" min="1" max="1" step="1" value="1">
+        </div>
+        <table class="reqtable">
+          <thead><tr><th>Bytes</th><th>Field</th><th>Value</th><th>Meaning</th></tr></thead>
+          <tbody id="trOneBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-crop" role="tabpanel" hidden>
+      <p class="lede">Drag a box on the panel above, or set the edges below.
+        Everything after this step runs on the crop, which keeps the later
+        steps fast and keeps the f-k transform from measuring a mute or a
+        record edge that was never part of the zone of interest.</p>
+
+      <div class="paneCtl" style="border-top:0;padding-top:0">
+        <div class="ctl">
+          <label for="cTr0">First trace <span class="readout" id="cTr0R">1</span></label>
+          <input type="range" id="cTr0" min="1" max="2" step="1" value="1">
+        </div>
+        <div class="ctl">
+          <label for="cTr1">Last trace <span class="readout" id="cTr1R">1</span></label>
+          <input type="range" id="cTr1" min="1" max="2" step="1" value="2">
+        </div>
+        <div class="ctl">
+          <label for="cT0">Start time <span class="readout" id="cT0R">0.00 s</span></label>
+          <input type="range" id="cT0" min="0" max="1" step="1" value="0">
+        </div>
+        <div class="ctl">
+          <label for="cT1">End time <span class="readout" id="cT1R">0.00 s</span></label>
+          <input type="range" id="cT1" min="0" max="1" step="1" value="1">
+        </div>
+      </div>
+
+      <p style="margin-top:14px">
+        <button class="btn" type="button" id="btnCrop">Use this crop</button>
+        <button class="btn ghost" type="button" id="btnWhole">Whole line</button>
+        <span class="hint" id="cropNote" style="margin-left:10px"></span>
+      </p>
+
+      <div class="whymatters">
+        <h4>What the crop decides</h4>
+        <p>The f-k transform on the later steps sees only what is selected, so
+          the dips and frequencies it measures are the ones inside the box. A
+          crop that takes in the muted top of the record, or the part below
+          which there is only noise, puts those into the measurement.</p>
       </div>
     </section>
 
     <!-- ------------------------------------------------------------ -->
     <section class="tabpane" id="pane-next" role="tabpanel" hidden>
-      <p class="lede">What is worth settling on this section before any
-        filtering is applied to it.</p>
+      <p class="lede">What is worth settling on this line before anything is
+        applied to it.</p>
 
-      <div class="check"><p><b>Does the section look like what the file says
-        it is?</b> A record length that disagrees with the panel, or a section
-        that is half blank, usually means the sample count or the format code
-        was read from a field that was filled in wrongly rather than that the
-        data is damaged.</p></div>
+      <div class="check"><p><b>Does the section match what the headers
+        claim?</b> A record length that disagrees with the panel, or a section
+        that is half blank, usually means a field was filled in wrongly rather
+        than that the file is damaged.</p></div>
 
-      <div class="check"><p><b>Where does the signal stop?</b> Most crustal
-        lines have a depth below which there is nothing but noise. Reading that
-        level off the panel now sets what the later steps can be expected to
-        recover, and what they will be inventing.</p></div>
+      <div class="check"><p><b>Where does the signal stop?</b> Turn the display
+        gain on and find the level below which there is only noise. That sets
+        what the later steps can recover and what they would be
+        inventing.</p></div>
 
-      <div class="check"><p><b>Is anything already done to the amplitudes?</b>
-        A section whose deep half is as strong as its shallow half has been
-        gained, and that gain is part of the file now. The text header on the
-        next step is where any record of it would be.</p></div>
+      <div class="check"><p><b>Has gain already been applied?</b> A section
+        whose deep half is as strong as its shallow half was gained before it
+        was written, and that is now part of the file. The text header is where
+        any record of it would be.</p></div>
 
-      <div class="check"><p><b>Is the display flattering the data?</b> The clip
-        control changes how strong every event looks without changing a number.
-        A section at 90 percent clip and the same section at 100 can support
-        different readings.</p></div>
+      <div class="check"><p><b>Is there geometry?</b> Without coordinates in
+        the trace headers the horizontal axis is a trace number, not a
+        distance, and a dip in milliseconds per trace cannot be turned into an
+        angle.</p></div>
 
-      <div class="check"><p><b>What is the goal for this line?</b> Imaging
-        lower-crustal fabric, following a single reflector, or comparing
-        reflection strength with depth lead to different choices at the
-        amplitude and filtering steps, and the choices are not
-        interchangeable.</p></div>
+      <div class="check"><p><b>What is this line for?</b> Imaging lower-crustal
+        fabric, following one reflector, and comparing reflection strength with
+        depth lead to different choices at the gain and filter steps, and the
+        choices are not interchangeable.</p></div>
     </section>
   </div>
 
   <div class="pager">
     <a class="btn" href="../index.html">&larr; All steps</a>
-    <a class="btn" href="02-headers.html" id="btnNext">What the file says about itself &rarr;</a>
+    <a class="btn" href="02-amplitude.html" id="btnNext">Amplitude down the record &rarr;</a>
   </div>
 </div>
 
@@ -292,18 +337,24 @@
 <script src="../js/page.js"></script>
 <script>
 /* ---------------------------------------------------------------
-   Step 1. Read a SEG-Y file, show it, and write it to the store as
-   the raw stage so the later steps have something to work on.
+   Step 1. Read a SEG-Y file, show what its headers claim, cut the
+   line down, and write both the whole line and the crop to the
+   store for the steps that follow.
    --------------------------------------------------------------- */
 
-let SEG = null;
-let SRC = "";          // what was opened, for the caption
+let SEG = null;         // the parsed line
+let BYTES = null;       // the file itself, for the header readers
+let LAYOUT = null;      // {start, traceBytes, big}
+let SRC = "";
+let CROP = null;        // {i0, i1, j0, j1} in trace and sample index
+let SCAN = null;        // trace header summary across the line
 
-/* every control whose setting belongs in a shared link */
 const CONTROLS = ["clip", "ph", "vel", "cmap", "cmapRev", "pol", "gain",
                   "tpow", "agcWin"];
-let POL = 1;            // 1 is SEG normal, -1 draws a peak as a trough
-let GAIN = "none";      // display only; the data path is step 4
+let POL = 1;
+let GAIN = "none";
+
+/* ------------------------------------------------------------ controls */
 
 function readParams(){
   return {clip: +$("clip").value, ph: +$("ph").value, vel: +$("vel").value,
@@ -321,71 +372,68 @@ function readouts(){
   $("tpowCtl").hidden = GAIN !== "tpow";
   $("agcCtl").hidden  = GAIN !== "agc";
   $("gainNote").textContent =
-    GAIN === "none" ? "The section as the file holds it. On a line with no gain already applied, the deep half will look empty."
+    GAIN === "none" ? "The section as the file holds it. On a line that was never gained the deep half looks empty."
   : GAIN === "tpow" ? "One curve over the whole record, so two events at the same time keep their relative amplitude."
-  : "Everything is brought to the same level, which makes the deep half visible and ends any comparison of strength with depth.";
+  : "Every part of the record brought to the same level. The deep half becomes visible and strength can no longer be compared with depth.";
 }
+
+function fillCmaps(){
+  $("cmap").innerHTML = CMAP_DIVERGING.map(k =>
+    '<option value="' + k + '">' + CMAP_LABEL[k] + '</option>').join("");
+}
+
+function segControl(segId, inputId, onPick){
+  const el = $(inputId);
+  const paint = () => $(segId).querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.v === el.value ? "true" : "false"));
+  $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    el.value = b.dataset.v; paint(); stateWrite(CONTROLS); onPick(el.value);
+  }));
+  paint(); onPick(el.value);
+}
+
+/* ------------------------------------------------------------- drawing */
 
 function redraw(){
   readouts();
   const p = readParams();
   const ph = panelHeight(p.ph);
-  ["cSec","axY"].forEach(id => { $(id).style.height = ph + "px"; });
-  DISPLAY_H = Math.max(60, Math.round(panelHeight(p.ph) * (window.devicePixelRatio || 1)));
+  ["cSec", "axY"].forEach(id => { $(id).style.height = ph + "px"; });
+  DISPLAY_H = Math.max(60, Math.round(ph * (window.devicePixelRatio || 1)));
   if (!SEG) return;
   const {nx, ns, dt} = SEG;
-  const shown = displayGain(SEG.data, nx, ns, dt, SEG.j0 || 0, GAIN, p.tpow, p.agcWin);
+  const shown = displayGain(SEG.data, nx, ns, dt, 0, GAIN, p.tpow, p.agcWin);
   const clip = percentileAbs(shown, p.clip) || 1e-30;
   const lut = p.rev ? reverseLUT(buildLUT(p.cmap)) : buildLUT(p.cmap);
-  // reversing polarity swaps the two ends of the scale rather than touching
-  // the samples, so nothing downstream of the display sees it
   draw($("cSec"), shown, nx, ns, POL * -clip, POL * clip, lut);
+  drawCropBox();
   drawYAxis("axY", 0, ns * dt * 1e-6, "two-way time (s)", 1, p.vel > 0 ? p.vel : 0);
   drawXAxis("axX", 1, nx, "trace");
 }
 
-function fmtSeconds(s){
-  return s >= 1 ? s.toFixed(1) + " s" : (s * 1000).toFixed(0) + " ms";
+/* The crop drawn over the section it applies to, rather than described in
+   four numbers underneath it. */
+function drawCropBox(){
+  if (!SEG || !CROP) return;
+  if (CROP.i0 === 0 && CROP.j0 === 0 &&
+      CROP.i1 === SEG.nx - 1 && CROP.j1 === SEG.ns - 1) return;
+  const cv = $("cSec"), ctx = cv.getContext("2d");
+  const {nx, ns} = SEG;
+  const x0 = CROP.i0 / nx * cv.width,  x1 = (CROP.i1 + 1) / nx * cv.width;
+  const y0 = CROP.j0 / ns * cv.height, y1 = (CROP.j1 + 1) / ns * cv.height;
+  ctx.save();
+  ctx.fillStyle = "rgba(22,25,28,.34)";
+  ctx.fillRect(0, 0, cv.width, y0);
+  ctx.fillRect(0, y1, cv.width, cv.height - y1);
+  ctx.fillRect(0, y0, x0, y1 - y0);
+  ctx.fillRect(x1, y0, cv.width - x1, y1 - y0);
+  ctx.strokeStyle = "#841617";
+  ctx.lineWidth = Math.max(1.5, cv.width / 500);
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.restore();
 }
 
-function fillReadout(){
-  if (!SEG) return;
-  const {nx, ns, dt, fmt, rev, big, ntrFile, step} = SEG;
-  const rec = ns * dt * 1e-6;
-  const nyq = 0.5 / (dt * 1e-6);
-  const rows = [
-    ["Traces in the file", ntrFile, "counted from the file length and the trace length"],
-    ["Traces held", nx + (step > 1 ? " (every " + step + a_ord(step) + " trace)" : ""),
-     step > 1 ? "decimated to fit in memory" : "all of them"],
-    ["Samples per trace", ns, "binary header, checked against the first trace header"],
-    ["Sample interval", (dt / 1000).toFixed(dt % 1000 ? 2 : 0) + " ms", "binary header"],
-    ["Record length", fmtSeconds(rec), "samples multiplied by the sample interval"],
-    ["Nyquist frequency", nyq.toFixed(1) + " Hz", "half the sampling rate"],
-    ["Number format", (FMTNAME[fmt] || "code " + fmt) + " (code " + fmt + ")", "binary header"],
-    ["Byte order", big ? "big-endian" : "little-endian", "inferred from whether the header reads sensibly"],
-    ["SEG-Y revision", rev ? "rev " + rev : "not stated", "binary header"],
-    ["Opened from", SRC, ""]
-  ];
-  $("readBody").innerHTML = rows.map(r =>
-    "<tr><td>" + r[0] + "</td><td>" + r[1] + "</td><td>" + r[2] + "</td></tr>").join("");
-  $("readTable").hidden = false;
-  $("readNotes").hidden = false;
-  $("readLede").textContent = "What this file reports about itself. " +
-    "Fields in a SEG-Y header are filled in by whoever wrote the file, and " +
-    "some of them are routinely wrong; the next step goes through them.";
-  $("nyqNote").textContent =
-    "At " + (dt / 1000).toFixed(dt % 1000 ? 2 : 0) + " ms the file cannot hold anything above " +
-    nyq.toFixed(1) + " Hz. Deep crustal lines are usually recorded at 4 or 8 ms because the " +
-    "returning energy is low frequency by the time it has traveled through 40 km of crust and " +
-    "back. Any filter corner or balancing band set later has that ceiling above it.";
-  glossaryScan($("pane-read"));
-}
-
-function a_ord(n){
-  const s = n % 100;
-  if (s >= 11 && s <= 13) return "th";
-  return {1:"st", 2:"nd", 3:"rd"}[n % 10] || "th";
-}
+/* ------------------------------------------------------------- loading */
 
 function note(msg, bad){
   const el = $("loadNote");
@@ -393,24 +441,249 @@ function note(msg, bad){
   el.style.color = bad ? "var(--crimson)" : "var(--slate)";
 }
 
-function useSegy(seg, src){
-  SEG = seg; SRC = src;
-  $("secTitle").textContent = src;
+function fmtSeconds(s){
+  return s >= 1 ? s.toFixed(2) + " s" : (s * 1000).toFixed(0) + " ms";
+}
+
+function ordinal(n){
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return "th";
+  return {1:"st", 2:"nd", 3:"rd"}[n % 10] || "th";
+}
+
+function row(cells){
+  return "<tr>" + cells.map(c => "<td>" + c + "</td>").join("") + "</tr>";
+}
+
+function fillOverview(){
+  const {nx, ns, dt, fmt, big, rev, ntrFile, step} = SEG;
+  const rec = ns * dt * 1e-6, nyq = 0.5 / (dt * 1e-6);
+  const rows = [
+    ["Traces in the file", ntrFile, "file length against trace length"],
+    ["Traces held", nx + (step > 1 ? " (every " + step + ordinal(step) + ")" : ""),
+     step > 1 ? "decimated to fit in memory" : "all of them"],
+    ["Samples per trace", ns, "binary header, checked against trace 1"],
+    ["Sample interval", (dt / 1000).toFixed(dt % 1000 ? 2 : 0) + " ms", "binary header"],
+    ["Record length", fmtSeconds(rec), "samples by sample interval"],
+    ["Nyquist frequency", nyq.toFixed(1) + " Hz", "half the sampling rate"],
+    ["Number format", (FMTNAME[fmt] || "code " + fmt) + " (code " + fmt + ")", "binary header"],
+    ["Byte order", big ? "big-endian" : "little-endian", "whichever reads sensibly"],
+    ["SEG-Y revision", rev ? "rev " + rev : "not stated", "binary header"]
+  ];
+  $("ovBody").innerHTML = rows.map(r => row(r)).join("");
+  $("ovTable").hidden = false;
+}
+
+function fillSegyHeader(){
+  const txt = SEG.textual || [];
+  $("txtHdr").textContent = txt.map((l, i) =>
+    String(i + 1).padStart(2, " ") + "  " + l).join("\n");
+  const printable = txt.join("").replace(/[^ -~]/g, "").length;
+  $("txtNote").textContent = printable < 400
+    ? "Mostly unprintable, so little or nothing was written here."
+    : printable + " printable characters of 3200.";
+  drawBinary();
+  $("segyLede").textContent = "What this file says about itself. These fields " +
+    "were filled in by whoever wrote it, and some of them are routinely wrong.";
+  $("segyBody").hidden = false;
+}
+
+function drawBinary(){
+  const all = $("binAll").checked;
+  const f = readBinaryHeader(BYTES, SEG.big).filter(x => all || x.value !== 0);
+  $("binBody").innerHTML = f.map(x => row([
+    x.pos + "-" + (x.pos + x.size - 1), x.name, x.value, x.note || ""
+  ])).join("") || row(["", "Every field read as zero.", "", ""]);
+}
+
+function fillTraceHeaders(){
+  SCAN = scanTraceHeaders(BYTES, LAYOUT, SEG.ntrFile);
+  $("trScan").textContent = SCAN.sampled + " of " + SEG.ntrFile +
+    " traces read" + (SCAN.step > 1 ? ", every " + SCAN.step + ordinal(SCAN.step) : "") + ".";
+  drawTraceSummary();
+  const sl = $("trPick");
+  sl.max = SEG.ntrFile; sl.value = 1;
+  drawOneTrace();
+
+  // What would have carried geometry, and what it actually holds. A field with
+  // the same value on every trace describes nothing along a line, whether that
+  // value is zero or a number left over from something else.
+  const f = n => SCAN.fields.find(x => x.name === n);
+  const state = names => {
+    const fs = names.map(f).filter(Boolean);
+    if (!fs.length || fs.every(x => x.live === 0)) return "absent";
+    return fs.every(x => x.min === x.max) ? "constant" : "varies";
+  };
+  const gaps = [];
+  const coord = state(["Source X coordinate", "Group X coordinate", "CDP X coordinate"]);
+  if (coord === "absent")
+    gaps.push("No coordinates, so the line cannot be posted on a map and the trace spacing is unknown.");
+  else if (coord === "constant")
+    gaps.push("The coordinate fields hold the same value on every trace, which describes no line. " +
+              "A constant in a coordinate field is usually text or a flag written into the wrong bytes.");
+  if (state(["Receiver group elevation", "Surface elevation at source"]) === "absent")
+    gaps.push("No elevations, so nothing records the datum the times are referenced to.");
+  if (state(["Delay recording time"]) === "absent")
+    gaps.push("No recording delay, so the first sample is being taken as time zero.");
+  const fr = f("Original field record number");
+  if (fr && fr.live > 0 && fr.min === fr.max && Math.abs(fr.min) > 1e6)
+    gaps.push("The field record number is one large constant on every trace, which is not a record number.");
+  $("trGaps").hidden = !gaps.length;
+  if (gaps.length) $("trGapsText").textContent = gaps.join(" ");
+  $("trLede").textContent = "";
+  $("trBody").hidden = false;
+}
+
+function drawTraceSummary(){
+  const all = $("trAll").checked;
+  const f = SCAN.fields.filter(x => all || x.live > 0);
+  $("trSumBody").innerHTML = f.map(x => row([
+    x.pos + "-" + (x.pos + x.size - 1),
+    x.name,
+    x.live === 0 ? "&mdash;" : (x.min === x.max ? x.min : x.min + " to " + x.max),
+    x.live === 0 ? "none" : (x.live === x.n ? "all" : x.live + " of " + x.n)
+  ])).join("");
+}
+
+function drawOneTrace(){
+  const i = Math.max(1, Math.min(SEG.ntrFile, +$("trPick").value));
+  $("trPickR").textContent = i;
+  const f = readTraceHeader(BYTES, i - 1, LAYOUT);
+  $("trOneBody").innerHTML = f.map(x => row([
+    x.pos + "-" + (x.pos + x.size - 1), x.name, x.value, x.note || ""
+  ])).join("");
+}
+
+/* ---------------------------------------------------------------- crop */
+
+function setCropLimits(){
+  const {nx, ns} = SEG;
+  const set = (id, min, max, v) => {
+    const el = $(id); el.min = min; el.max = max; el.value = v;
+  };
+  set("cTr0", 1, nx, 1); set("cTr1", 1, nx, nx);
+  set("cT0", 0, ns - 1, 0); set("cT1", 1, ns - 1, ns - 1);
+  CROP = {i0: 0, i1: nx - 1, j0: 0, j1: ns - 1};
+  cropReadouts();
+}
+
+function cropReadouts(){
+  if (!SEG || !CROP) return;
+  const dtms = SEG.dt * 1e-3;
+  $("cTr0R").textContent = CROP.i0 + 1;
+  $("cTr1R").textContent = CROP.i1 + 1;
+  $("cT0R").textContent = (CROP.j0 * dtms / 1000).toFixed(2) + " s";
+  $("cT1R").textContent = ((CROP.j1 + 1) * dtms / 1000).toFixed(2) + " s";
+}
+
+function cropFromSliders(){
+  let i0 = +$("cTr0").value - 1, i1 = +$("cTr1").value - 1;
+  let j0 = +$("cT0").value,      j1 = +$("cT1").value;
+  if (i1 < i0) { const t = i0; i0 = i1; i1 = t; }
+  if (j1 < j0) { const t = j0; j0 = j1; j1 = t; }
+  CROP = {i0, i1, j0, j1};
+  cropReadouts();
+  redraw();
+}
+
+/* Dragging a box on the panel. The panel is drawn at the size it is displayed,
+   so what carries across is the fraction of the box, not a pixel count. */
+function wireDrag(){
+  const cv = $("cSec");
+  let from = null;
+  const at = e => {
+    const r = cv.getBoundingClientRect();
+    return {fx: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+            fy: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))};
+  };
+  cv.style.cursor = "crosshair";
+  cv.addEventListener("pointerdown", e => {
+    if (!SEG) return;
+    from = at(e);
+    if (cv.setPointerCapture) cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!from || !SEG) return;
+    const to = at(e), {nx, ns} = SEG;
+    CROP = {
+      i0: Math.round(Math.min(from.fx, to.fx) * (nx - 1)),
+      i1: Math.round(Math.max(from.fx, to.fx) * (nx - 1)),
+      j0: Math.round(Math.min(from.fy, to.fy) * (ns - 1)),
+      j1: Math.round(Math.max(from.fy, to.fy) * (ns - 1))
+    };
+    syncCropSliders();
+    redraw();
+  });
+  cv.addEventListener("pointerup", () => { from = null; });
+  cv.addEventListener("pointercancel", () => { from = null; });
+}
+
+function syncCropSliders(){
+  $("cTr0").value = CROP.i0 + 1; $("cTr1").value = CROP.i1 + 1;
+  $("cT0").value = CROP.j0;      $("cT1").value = CROP.j1;
+  cropReadouts();
+}
+
+function applyCrop(){
+  if (!SEG || !CROP) return;
+  const {ns, dt} = SEG;
+  const w = CROP.i1 - CROP.i0 + 1, h = CROP.j1 - CROP.j0 + 1;
+  if (w < 8 || h < 16){
+    $("cropNote").textContent = "That box is too small to work on.";
+    return;
+  }
+  const out = new Float32Array(w * h);
+  for (let i = 0; i < w; i++)
+    for (let j = 0; j < h; j++)
+      out[i*h + j] = SEG.data[(CROP.i0 + i) * ns + CROP.j0 + j];
+  stageSave("crop", {data: out, nx: w, ns: h, dt, j0: CROP.j0},
+            {name: SRC, box: [CROP.i0, CROP.i1, CROP.j0, CROP.j1]})
+    .then(() => stageDropAfter("crop"))
+    .then(() => {
+      $("cropNote").textContent = w + " traces by " + h + " samples, " +
+        (h * dt * 1e-6).toFixed(2) + " s, saved for the next step.";
+      $("capNote").textContent = "\u2014 cropped to " + w + " by " + h;
+    })
+    .catch(e => { $("cropNote").textContent = "Browser storage refused it: " + e.message; });
+}
+
+function wholeLine(){
+  if (!SEG) return;
+  setCropLimits();
+  redraw();
+  stageSave("crop", {data: SEG.data, nx: SEG.nx, ns: SEG.ns, dt: SEG.dt, j0: 0},
+            {name: SRC, box: "whole line"})
+    .then(() => stageDropAfter("crop"))
+    .then(() => {
+      $("cropNote").textContent = "The whole line goes forward.";
+      $("capNote").textContent = "";
+    })
+    .catch(() => {});
+}
+
+/* ------------------------------------------------------------ assembly */
+
+function useSegy(seg, src, bytes){
+  SEG = seg; SRC = src; BYTES = bytes;
+  LAYOUT = {start: seg.start, traceBytes: seg.traceBytes, big: seg.big};
+  $("capLine").textContent = src;
+  $("capNote").textContent = "";
   $("unitLine").textContent =
     seg.nx + " traces, " + seg.ns + " samples, " + (seg.dt / 1000) + " ms";
+  setCropLimits();
   redraw();
-  fillReadout();
+  fillOverview();
+  fillSegyHeader();
+  fillTraceHeaders();
+  glossaryScan(document.querySelector(".tab-wrap"));
 
   const section = {data: seg.data, nx: seg.nx, ns: seg.ns, dt: seg.dt, j0: 0};
-  // the original bytes travel with the stage so that the header step can read
-  // the trace headers without asking for the file again
-  const meta = {name: src, fmt: seg.fmt, rev: seg.rev, big: seg.big,
-                ntrFile: seg.ntrFile, step: seg.step,
-                textual: seg.textual, bytes: seg.bytes || null};
-  stageSave("raw", section, meta)
+  stageSave("raw", section, {name: src, fmt: seg.fmt, rev: seg.rev, big: seg.big,
+                             ntrFile: seg.ntrFile, step: seg.step})
     .then(() => stageDropAfter("raw"))
-    .then(() => note("Loaded and saved. Anything done to a previous line in the later steps has been cleared."))
-    .catch(e => note("Loaded, but browser storage refused it (" + e.message +
+    .then(() => stageSave("crop", section, {name: src, box: "whole line"}))
+    .then(() => note("Read and saved. Anything done to a previous line in the later steps has been cleared."))
+    .catch(e => note("Read, but browser storage refused it (" + e.message +
                      "), so the later steps will not see it. Private browsing usually causes this.", true));
 }
 
@@ -418,8 +691,7 @@ function openBuffer(ab, src){
   let seg;
   try { seg = parseSegy(ab); }
   catch (e){ note("That file could not be read: " + e.message, true); return; }
-  seg.bytes = ab;
-  useSegy(seg, src);
+  useSegy(seg, src, ab);
 }
 
 function openFile(f){
@@ -436,30 +708,7 @@ function openSample(url, label){
     .catch(e => note("The sample line did not load: " + e.message, true));
 }
 
-/* the maps are listed from the table in display.js rather than written out
-   here, so a map added there appears in every page's control */
-function fillCmaps(){
-  const sel = $("cmap");
-  sel.innerHTML = CMAP_DIVERGING.map(k =>
-    '<option value="' + k + '">' + CMAP_LABEL[k] + '</option>').join("");
-}
-
-/* A row of buttons behaving as one control. The value lives in a hidden input
-   so that it travels in the shared link with everything else, and so that a
-   link carrying it sets the buttons on the way in. */
-function segControl(segId, inputId, onPick){
-  const el = $(inputId);
-  const paint = () => $(segId).querySelectorAll("button").forEach(b =>
-    b.setAttribute("aria-pressed", b.dataset.v === el.value ? "true" : "false"));
-  $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    el.value = b.dataset.v;
-    paint();
-    stateWrite(CONTROLS);
-    onPick(el.value);
-  }));
-  paint();
-  onPick(el.value);
-}
+/* ---------------------------------------------------------------- wire */
 
 pageReady(() => {
   fillCmaps();
@@ -481,6 +730,14 @@ pageReady(() => {
   $("fileIn").addEventListener("change", e => {
     if (e.target.files && e.target.files[0]) openFile(e.target.files[0]);
   });
+  $("binAll").addEventListener("change", drawBinary);
+  $("trAll").addEventListener("change", drawTraceSummary);
+  $("trPick").addEventListener("input", drawOneTrace);
+  ["cTr0","cTr1","cT0","cT1"].forEach(id =>
+    $(id).addEventListener("input", cropFromSliders));
+  $("btnCrop").addEventListener("click", applyCrop);
+  $("btnWhole").addEventListener("click", wholeLine);
+  wireDrag();
 
   const drop = $("panelrow");
   ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => {
@@ -494,26 +751,10 @@ pageReady(() => {
     if (f) openFile(f);
   });
 
-  $("btnPng").addEventListener("click", () =>
-    savePanelPNG(["cSec"], SRC || "section"));
+  $("btnPng").addEventListener("click", () => savePanelPNG(["cSec"], SRC || "section"));
   $("btnLink").addEventListener("click", e => copyPageLink(e.currentTarget));
 
   pageChrome();
-
-  // a line already in the store is shown rather than asking for it again
-  stageLoad("raw").then(r => {
-    if (!r) return;
-    SRC = (r.meta && r.meta.name) || "the line already loaded";
-    SEG = {data: r.data, nx: r.nx, ns: r.ns, dt: r.dt,
-           fmt: (r.meta && r.meta.fmt) || 0, rev: (r.meta && r.meta.rev) || 0,
-           big: !(r.meta && r.meta.big === false),
-           ntrFile: (r.meta && r.meta.ntrFile) || r.nx,
-           step: (r.meta && r.meta.step) || 1};
-    $("secTitle").textContent = SRC;
-    $("unitLine").textContent = SEG.nx + " traces, " + SEG.ns + " samples, " + (SEG.dt / 1000) + " ms";
-    redraw(); fillReadout();
-    note("This line is already loaded. Opening another one replaces it.");
-  }).catch(() => {});
 });
 </script>
 <script src="../assets/count.js"></script>

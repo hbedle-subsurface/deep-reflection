@@ -66,9 +66,15 @@ function decayOf(seg){
   for (let k=0;k<m;k++){ sx+=xs[k]; sy+=ys[k]; sxx+=xs[k]*xs[k]; sxy+=xs[k]*ys[k]; }
   const den = m*sxx - sx*sx;
   if (!(Math.abs(den) > 1e-12)) return null;
-  return {n: -(m*sxy - sx*sy)/den,
+  const slope = (m*sxy - sx*sy)/den;
+  const icept = (sy - slope*sx)/m;
+  return {n: -slope,
           db: 20/Math.LN10*(ys[m-1] - ys[0]),
-          t0: Math.exp(xs[0]), t1: Math.exp(xs[m-1])};
+          t0: Math.exp(xs[0]), t1: Math.exp(xs[m-1]),
+          // the windows themselves, so the page can draw the measurement
+          // rather than only report the number fitted to it
+          t: T, rms: Y,
+          fit: t => Math.exp(icept + slope*Math.log(t))};
 }
 
 /* The t^n exponent that matches a measured decay, rounded to a tenth and held

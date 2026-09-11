@@ -23,7 +23,7 @@ function resolveStage(want){
 
 const STAGE_LABEL = {
   raw:     "the line as loaded",
-  crop:    "the cropped zone",
+  crop:    "the line as cropped",
   gain:    "the section after amplitude recovery",
   fk:      "the f-k filtered section",
   sof:     "the smoothed section",
@@ -31,8 +31,8 @@ const STAGE_LABEL = {
 };
 
 const STAGE_PAGE = {
-  raw: "01-load.html", crop: "03-crop.html", gain: "04-amplitude.html",
-  fk: "05-fk.html", sof: "06-sof.html", balance: "07-balance.html"
+  raw: "01-load.html", crop: "01-load.html", gain: "02-amplitude.html",
+  fk: "03-fk.html", sof: "04-sof.html", balance: "05-balance.html"
 };
 
 /* Read a SEG-Y file that ships with the site. Used by the guard so that a page
@@ -121,7 +121,8 @@ function panelHeight(asked){
 /* The step pages that exist. Links to anything else are left in place but
    marked and made inert, so a half-built site does not send a reader to a 404.
    One line to update as a page is added. */
-const BUILT_PAGES = ["01-load.html", "08-attributes.html"];
+const BUILT_PAGES = ["01-load.html", "02-amplitude.html",
+                     "06-attributes.html"];
 
 function markUnbuilt(){
   const here = location.pathname.replace(/^.*\//, "");

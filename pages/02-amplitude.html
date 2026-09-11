@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amplitude down the record — Working with deep reflection data</title>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/glossary.css">
+<link rel="stylesheet" href="../assets/page.css">
+</head>
+<body id="top">
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="brand" href="../index.html"><span class="dot"></span>
+      Working with <b>deep reflection data</b></a>
+    <nav>
+      <a href="../index.html">All steps</a>
+      <a href="01-load.html">Back to the line</a>
+      <a href="#" id="btnRef">Reference</a>
+    </nav>
+  </header>
+
+  <div class="mod-head">
+    <p class="eyebrow">Step 2 of 9</p>
+    <h1>Amplitude down the record</h1>
+    <p class="sub">Reflections from 40 km down come back weaker than
+      reflections from 2 km. This step measures how much weaker on this line,
+      and puts back as much of that as is wanted. Unlike the gain on step 1,
+      what is applied here goes into the data every later step works on.</p>
+  </div>
+</div>
+
+<div class="labhead" id="labhead">
+  <div class="wrap">
+    <div class="labgrid">
+      <div>
+        <p class="cap"><span id="capLine">Nothing loaded</span>
+          <span id="capNote"></span></p>
+        <div class="panelrow" style="grid-template-columns:54px minmax(0,1fr) minmax(0,1fr)">
+          <canvas class="axY" id="axY"></canvas>
+          <figure>
+            <figcaption><span>Before</span><b id="fromLabel">&mdash;</b></figcaption>
+            <canvas class="sect" id="cIn"></canvas>
+          </figure>
+          <figure>
+            <figcaption><span>After</span><b id="gainLabel">no gain</b></figcaption>
+            <canvas class="sect" id="cOut"></canvas>
+          </figure>
+          <p class="unitline" id="unitLine"></p>
+        </div>
+        <div class="axXrow" style="grid-template-columns:54px minmax(0,1fr)">
+          <span></span><canvas id="axX"></canvas>
+        </div>
+      </div>
+
+      <div class="controls">
+        <p class="cap">Gain <span>&mdash; this one goes into the data</span></p>
+        <div class="ctl-col">
+          <div class="ctl">
+            <label>Applied</label>
+            <input type="hidden" id="gain" value="tpow">
+            <div class="seg" id="gainSeg">
+              <button type="button" data-v="none">None</button>
+              <button type="button" data-v="tpow">t&#8319;</button>
+              <button type="button" data-v="agc">AGC</button>
+            </div>
+          </div>
+          <div class="ctl" id="tpowCtl">
+            <label for="tpow">Exponent n <span class="readout" id="tpowR">1.0</span></label>
+            <input type="range" id="tpow" min="0" max="4" step="0.1" value="1">
+          </div>
+          <div class="ctl" id="agcCtl" hidden>
+            <label for="agcWin">Window <span class="readout" id="agcWinR">500 ms</span></label>
+            <input type="range" id="agcWin" min="100" max="3000" step="50" value="500">
+          </div>
+
+          <h2>Display</h2>
+          <div class="ctl">
+            <label for="clip">Amplitude clip <span class="readout" id="clipR">98%</span></label>
+            <input type="range" id="clip" min="90" max="100" step="0.5" value="98">
+          </div>
+          <div class="ctl">
+            <label for="ph">Panel height <span class="readout" id="phR">380 px</span></label>
+            <input type="range" id="ph" min="240" max="900" step="20" value="380">
+          </div>
+          <div class="ctl">
+            <label for="cmap">Color map</label>
+            <select id="cmap"></select>
+          </div>
+          <div class="ctl">
+            <label>Polarity</label>
+            <input type="hidden" id="pol" value="1">
+            <div class="seg" id="polSeg">
+              <button type="button" data-v="1">SEG normal</button>
+              <button type="button" data-v="-1">Reverse</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="guard" hidden></div>
+
+  <div class="modbar">
+    <span class="hint">Both panels are drawn at the same clip, so the change
+      between them is the gain and not the display.</span>
+    <button class="btn ghost small" type="button" id="btnPng">Save the panels as a picture</button>
+    <button class="btn ghost small" type="button" id="btnLink">Copy a link to this setup</button>
+  </div>
+
+  <div class="tab-wrap" id="tabwrap">
+    <div class="tabs">
+      <button aria-controls="pane-apply" aria-selected="true">Measure and apply</button>
+      <button aria-controls="pane-which">Which gain</button>
+      <button aria-controls="pane-next">Before going on</button>
+    </div>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-apply" role="tabpanel">
+      <div class="plot-head"><h3>How amplitude falls on this line</h3>
+        <span class="hint">RMS in forty windows, log time against log amplitude</span></div>
+      <canvas id="cDecay" style="display:block;width:100%;height:230px;
+              background:var(--panel);border:1px solid var(--rule)"></canvas>
+
+      <p class="lede" id="decayText" style="margin-top:12px"></p>
+
+      <p>
+        <button class="btn" type="button" id="btnFit">Use the measured exponent</button>
+        <button class="btn" type="button" id="btnSave">Save this for the next step</button>
+        <span class="hint" id="saveNote" style="margin-left:10px"></span>
+      </p>
+
+      <div class="whymatters">
+        <h4>What the number means</h4>
+        <p id="whyText"></p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-which" role="tabpanel" hidden>
+      <p class="lede">Three reasons amplitude falls with travel time. The
+        wavefront spreads over a larger area, so the energy per unit area drops.
+        Some energy is absorbed as heat. Some is scattered out of the recorded
+        direction by structure too small to image. The first is geometric and
+        acts on all frequencies alike; the other two act more strongly on high
+        frequencies, which is why a deep section is usually lower frequency as
+        well as weaker.</p>
+
+      <div class="twothings">
+        <div class="twogrid">
+          <div>
+            <h4>t to the power n</h4>
+            <p>One smooth curve over the whole record. Two events at the same
+              time are multiplied by the same number, so their relative
+              amplitude survives, and so does the comparison between one part
+              of the line and another at the same depth.</p>
+            <p>An exponent near 2 corresponds to spreading in a constant
+              velocity medium. What a line actually measures depends on what
+              was already done to it.</p>
+          </div>
+          <div>
+            <h4>AGC</h4>
+            <p>Each sample divided by a measure of amplitude taken in a window
+              around it, so the output has roughly the same strength
+              everywhere. It makes weak deep reflections visible when nothing
+              else will.</p>
+            <p>It also removes the amplitude relationship between shallow and
+              deep, and between a bright zone and a dim one within the same
+              window length. After AGC no statement about reflection strength
+              is recoverable.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="miscon">
+        <h4>A legacy stack has usually been gained already</h4>
+        <p>Archived sections were processed for display, and the sequence is
+          often no longer written down. A line that measures a shallow decay
+          exponent has already had most of it taken out, and applying a
+          textbook t&#178; on top of that multiplies the deep record by far more
+          than the decay being corrected.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-next" role="tabpanel" hidden>
+      <p class="lede">What the choice here settles for everything after it.</p>
+
+      <div class="check"><p><b>Which comparison matters on this line?</b>
+        Imaging structure needs the deep half visible and nothing more. Saying
+        anything about how reflectivity varies with depth, or between two parts
+        of the line, needs the amplitude relationship kept, which rules out
+        AGC.</p></div>
+
+      <div class="check"><p><b>Does the measured exponent look plausible?</b>
+        Much below 1 on a raw stack usually means gain was already applied. The
+        fitted line on the curve is the check: if the measured points curve
+        away from it, one exponent does not describe this record and a value
+        fitted over the whole of it is a compromise.</p></div>
+
+      <div class="check"><p><b>What does the deep half look like after?</b>
+        If gain brings up something structured, the later steps have something
+        to work on. If it brings up an even texture with no organization, that
+        is amplified noise, and the filters will happily shape it into
+        something that looks like geology.</p></div>
+
+      <div class="check"><p><b>Is the muted zone being gained too?</b>
+        A t^n curve multiplies zeros by a large number and they stay zero, but
+        AGC divides by a near-zero level and can turn the edge of a mute into a
+        band of amplified nothing.</p></div>
+    </section>
+  </div>
+
+  <div class="pager">
+    <a class="btn" href="01-load.html">&larr; Open a line</a>
+    <a class="btn" href="03-fk.html">Separation on dip and frequency &rarr;</a>
+  </div>
+</div>
+
+<footer>
+  <div class="foot-grid">
+    <p><b>Working with deep reflection data</b><br>
+      Heather Bedle, University of Oklahoma</p>
+    <p class="lic">Text and figures <span class="k">CC BY-SA 4.0</span>.
+      Wyoming Line 1 is COCORP data in the public domain.</p>
+  </div>
+</footer>
+
+<script src="../js/segy.js"></script>
+<script src="../js/dsp.js"></script>
+<script src="../js/display.js"></script>
+<script src="../js/spectrum.js"></script>
+<script src="../js/measure.js"></script>
+<script src="../js/help.js"></script>
+<script src="../js/glossary.js"></script>
+<script src="../js/store.js"></script>
+<script src="../assets/panelout.js"></script>
+<script src="../js/page.js"></script>
+<script>
+/* ---------------------------------------------------------------
+   Step 2. Measure how amplitude falls down the record, put back as
+   much of it as is wanted, and write the result as the gain stage.
+   --------------------------------------------------------------- */
+
+let SEC = null;          // what came in
+let FROM = "";
+let OUT = null;          // what goes on
+let DECAY = null;
+let POL = 1;
+let MODE = "tpow";
+
+const CONTROLS = ["gain", "tpow", "agcWin", "clip", "ph", "cmap", "pol"];
+
+function readParams(){
+  return {tpow: +$("tpow").value, agcWin: +$("agcWin").value,
+          clip: +$("clip").value, ph: +$("ph").value, cmap: $("cmap").value};
+}
+
+function readouts(){
+  const p = readParams();
+  $("tpowR").textContent = p.tpow.toFixed(1);
+  $("agcWinR").textContent = p.agcWin + " ms";
+  $("clipR").textContent = p.clip + "%";
+  $("phR").textContent = panelHeight(p.ph) + " px";
+  $("tpowCtl").hidden = MODE !== "tpow";
+  $("agcCtl").hidden  = MODE !== "agc";
+  $("gainLabel").textContent =
+    MODE === "none" ? "no gain" :
+    MODE === "tpow" ? "t^" + p.tpow.toFixed(1) : "AGC " + p.agcWin + " ms";
+}
+
+function fillCmaps(){
+  $("cmap").innerHTML = CMAP_DIVERGING.map(k =>
+    '<option value="' + k + '">' + CMAP_LABEL[k] + '</option>').join("");
+}
+
+function segControl(segId, inputId, onPick){
+  const el = $(inputId);
+  const paint = () => $(segId).querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.v === el.value ? "true" : "false"));
+  $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    el.value = b.dataset.v; paint(); stateWrite(CONTROLS); onPick(el.value);
+  }));
+  paint(); onPick(el.value);
+}
+
+/* --------------------------------------------------------- the measure */
+
+/* RMS against time on log axes, with the straight line that was fitted to it.
+   The fit is what the exponent comes from, and a record whose points bend away
+   from that line is not described by one exponent. */
+function drawDecay(){
+  const cv = $("cDecay");
+  const {ctx, w, h, ok} = fitCanvas(cv);
+  if (!ok || !DECAY || !DECAY.t.length) return;
+  const L = 46, R = 12, T = 12, B = 30;
+  const pw = w - L - R, ph = h - T - B;
+  const t = DECAY.t, y = DECAY.rms;
+  const tMin = t[0], tMax = t[t.length - 1];
+  let yMin = Infinity, yMax = -Infinity;
+  for (const v of y) if (v > 0){ if (v < yMin) yMin = v; if (v > yMax) yMax = v; }
+  const lx = v => L + (Math.log(v) - Math.log(tMin)) /
+                      (Math.log(tMax) - Math.log(tMin) || 1) * pw;
+  const ly = v => T + (1 - (Math.log(v) - Math.log(yMin)) /
+                      (Math.log(yMax) - Math.log(yMin) || 1)) * ph;
+
+  ctx.strokeStyle = "#C9CDD2"; ctx.lineWidth = 1;
+  ctx.strokeRect(L + 0.5, T + 0.5, pw, ph);
+  ctx.font = "9.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillStyle = "#5C6670";
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const v of [0.2, 0.5, 1, 2, 5, 10, 20]){
+    if (v < tMin || v > tMax) continue;
+    const x = lx(v);
+    ctx.beginPath(); ctx.moveTo(x + 0.5, T + ph); ctx.lineTo(x + 0.5, T + ph + 4); ctx.stroke();
+    ctx.fillText(v + " s", x, T + ph + 6);
+  }
+  ctx.save();
+  ctx.translate(12, T + ph / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("RMS amplitude", 0, 0);
+  ctx.restore();
+
+  if (DECAY.fit){
+    ctx.strokeStyle = "#841617"; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(lx(tMin), ly(Math.max(yMin, Math.min(yMax, DECAY.fit(tMin)))));
+    ctx.lineTo(lx(tMax), ly(Math.max(yMin, Math.min(yMax, DECAY.fit(tMax)))));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.fillStyle = "#16191C";
+  for (let k = 0; k < t.length; k++){
+    if (!(y[k] > 0)) continue;
+    ctx.beginPath(); ctx.arc(lx(t[k]), ly(y[k]), 2.4, 0, 6.283); ctx.fill();
+  }
+}
+
+function describeDecay(){
+  if (!DECAY){
+    $("decayText").textContent = "Too few windows carry amplitude for a fit to mean anything on this section.";
+    $("whyText").textContent = "";
+    return;
+  }
+  const n = DECAY.n, sug = tpowOf(DECAY);
+  $("decayText").textContent =
+    "Amplitude on this section falls as t^-" + n.toFixed(2) + ", which is " +
+    Math.abs(DECAY.db).toFixed(0) + " dB between " + DECAY.t0.toFixed(1) + " and " +
+    DECAY.t1.toFixed(1) + " s. An exponent of " + sug.toFixed(1) + " puts that back.";
+  $("whyText").textContent = n < 0.8
+    ? "Below about 1, most of the decay has already been taken out, which is usual for an archived stack processed for display. The processing that did it is not recorded in the file unless the text header says so."
+    : n > 2.5
+    ? "Above about 2.5 is steeper than spreading alone accounts for, so absorption and scattering are taking a large part of the energy, or a mute is pulling the deep windows down."
+    : "Between about 1 and 2.5, which is the range spreading and absorption together produce on a record that has not already been gained.";
+}
+
+/* -------------------------------------------------------------- output */
+
+function recompute(){
+  readouts();
+  if (!SEC) return;
+  const p = readParams();
+  OUT = displayGain(SEC.data, SEC.nx, SEC.ns, SEC.dt, SEC.j0 || 0,
+                    MODE, p.tpow, p.agcWin);
+  redraw();
+}
+
+function redraw(){
+  const p = readParams();
+  const ph = panelHeight(p.ph);
+  ["cIn", "cOut", "axY"].forEach(id => { $(id).style.height = ph + "px"; });
+  DISPLAY_H = Math.max(60, Math.round(ph * (window.devicePixelRatio || 1)));
+  if (!SEC) return;
+  const {nx, ns, dt, j0} = SEC;
+  const lut = buildLUT(p.cmap);
+
+  // each panel clipped on its own numbers, because a gained section and the
+  // section it came from do not share a scale and drawing them on one would
+  // show only that the gain multiplied everything
+  const cIn  = percentileAbs(SEC.data, p.clip) || 1e-30;
+  const cOut = percentileAbs(OUT || SEC.data, p.clip) || 1e-30;
+  draw($("cIn"),  SEC.data, nx, ns, POL * -cIn,  POL * cIn,  lut);
+  draw($("cOut"), OUT || SEC.data, nx, ns, POL * -cOut, POL * cOut, lut);
+
+  const t0 = (j0 || 0) * dt * 1e-6;
+  drawYAxis("axY", t0, t0 + ns * dt * 1e-6, "two-way time (s)", 1, 0);
+  drawXAxis("axX", 1, nx, "trace");
+  drawDecay();
+}
+
+function save(){
+  if (!SEC || !OUT) return;
+  const p = readParams();
+  stageSave("gain", {data: OUT, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt, j0: SEC.j0 || 0},
+            {mode: MODE, tpow: p.tpow, agcWin: p.agcWin, from: FROM})
+    .then(() => stageDropAfter("gain"))
+    .then(() => { $("saveNote").textContent = "Saved. The next step works on this."; })
+    .catch(e => { $("saveNote").textContent = "Browser storage refused it: " + e.message; });
+}
+
+function useSection(sec, from){
+  SEC = sec; FROM = from;
+  $("capLine").textContent = "Amplitude recovery";
+  $("fromLabel").textContent = STAGE_LABEL[from] || from;
+  $("unitLine").textContent = sec.nx + " traces, " + sec.ns + " samples, " +
+    (sec.dt / 1000) + " ms, " + (sec.ns * sec.dt * 1e-6).toFixed(2) + " s";
+  // measured on what came in, before anything here is applied to it
+  DECAY = decayOf(sec);
+  describeDecay();
+  if (DECAY) $("tpow").value = tpowOf(DECAY);
+  recompute();
+  glossaryScan(document.querySelector(".tab-wrap"));
+}
+
+pageReady(() => {
+  fillCmaps();
+  stateWrite(stateRead(CONTROLS));
+  setupTabs($("tabwrap"), () => stackSticky());
+
+  CONTROLS.forEach(id => {
+    const el = $(id);
+    if (el && el.type !== "hidden")
+      el.addEventListener("input", () => { stateWrite(CONTROLS); recompute(); });
+  });
+  segControl("gainSeg", "gain", v => { MODE = v; recompute(); });
+  segControl("polSeg", "pol", v => { POL = +v; redraw(); });
+  window.addEventListener("resize", () => { redraw(); stackSticky(); });
+
+  $("btnFit").addEventListener("click", () => {
+    if (!DECAY) return;
+    $("gain").value = "tpow";
+    $("gainSeg").querySelectorAll("button").forEach(b =>
+      b.setAttribute("aria-pressed", b.dataset.v === "tpow" ? "true" : "false"));
+    MODE = "tpow";
+    $("tpow").value = tpowOf(DECAY);
+    stateWrite(CONTROLS);
+    recompute();
+  });
+  $("btnSave").addEventListener("click", save);
+  $("btnPng").addEventListener("click", () => savePanelPNG(["cIn", "cOut"], "amplitude"));
+  $("btnLink").addEventListener("click", e => copyPageLink(e.currentTarget));
+
+  pageChrome();
+
+  resolveStage("crop").then(r => {
+    if (r && r.section) useSection(r.section, r.from);
+    else stageGuard($("guard"), "crop", seg =>
+      useSection({data: seg.data, nx: seg.nx, ns: seg.ns, dt: seg.dt, j0: 0}, "raw"));
+  }).catch(() => stageGuard($("guard"), "crop", seg =>
+      useSection({data: seg.data, nx: seg.nx, ns: seg.ns, dt: seg.dt, j0: 0}, "raw")));
+});
+</script>
+<script src="../assets/count.js"></script>
+</body>
+</html>

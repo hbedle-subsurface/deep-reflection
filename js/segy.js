@@ -62,7 +62,8 @@ function parseSegy(ab){
   if (!sane(fmt, ns)) throw new Error("Could not read a valid format code or sample count from the binary header.");
 
   let dt  = dv.getUint16(3216, !big);
-  const ext = dv.getInt16(3506, !big);
+  // bytes 3505-3506 in the standard, which is offset 3504
+  const ext = dv.getInt16(3504, !big);
   const rev = dv.getUint16(3500, !big);
 
   const bps = BPS[fmt];
@@ -117,7 +118,10 @@ function parseSegy(ab){
   for (let k = 0; k < data.length; k++) if (!isFinite(data[k])) data[k] = 0;
 
   return {full: data, fullNx: nx, fullNs: ns, cdpAll: cdp,
-          data, nx, ns, dt, fmt, rev, big, ntrFile: ntr, step, cdp, textual};
+          data, nx, ns, dt, fmt, rev, big, ntrFile: ntr, step, cdp, textual,
+          // where the traces begin and how long each one is, so the header
+          // readers can walk the file without working it out again
+          start, traceBytes};
 }
 
 /* ============================ SEG-Y writer ============================ */
@@ -160,4 +164,126 @@ function writeSegy(d, nx, ns, dt, cdp, startMs, lines){
     for (let j = 0; j < ns; j++){ dv.setFloat32(o, d[i*ns+j], false); o += 4; }
   }
   return buf;
+}
+
+/* ======================= headers, field by field =======================
+   The trace header is 240 bytes in front of every trace. The standard assigns
+   most of it, whoever wrote the file filled in some of it, and which some is
+   the thing worth knowing before anything is read off a line.
+
+   Byte positions are given the way the SEG-Y standard gives them: one-based
+   and inclusive, so "21-24" is the four bytes starting at offset 20. */
+
+const TRACE_FIELDS = [
+  [1,   4, "Trace sequence number within the line", "Counts across the whole line."],
+  [5,   4, "Trace sequence number within the file", "Restarts in a concatenated file."],
+  [9,   4, "Original field record number", "The shot or record it came from."],
+  [13,  4, "Trace number within the field record", ""],
+  [17,  4, "Energy source point number", ""],
+  [21,  4, "Ensemble number", "CDP or CMP number on a stacked line. The usual horizontal axis."],
+  [25,  4, "Trace number within the ensemble", "1 on every trace of a stack."],
+  [29,  2, "Trace identification code", "1 is live seismic data, 2 is dead, 3 is a dummy."],
+  [37,  4, "Distance from source to receiver", "Offset. Zero or absent on poststack data."],
+  [41,  4, "Receiver group elevation", "Positive up, scaled by bytes 69-70."],
+  [45,  4, "Surface elevation at source", "Positive up, scaled by bytes 69-70."],
+  [49,  4, "Source depth below surface", ""],
+  [53,  4, "Datum elevation at receiver group", ""],
+  [57,  4, "Datum elevation at source", ""],
+  [69,  2, "Scalar for elevations and depths", "Positive multiplies, negative divides."],
+  [71,  2, "Scalar for coordinates", "Positive multiplies, negative divides. Often -100."],
+  [73,  4, "Source X coordinate", ""],
+  [77,  4, "Source Y coordinate", ""],
+  [81,  4, "Group X coordinate", ""],
+  [85,  4, "Group Y coordinate", ""],
+  [89,  2, "Coordinate units", "1 length, 2 arc seconds, 3 decimal degrees."],
+  [109, 2, "Delay recording time", "Milliseconds between the source and the first sample. A non-zero value shifts the whole time axis."],
+  [111, 2, "Mute time, start", ""],
+  [113, 2, "Mute time, end", ""],
+  [115, 2, "Number of samples in this trace", "Overrides the binary header where the two disagree."],
+  [117, 2, "Sample interval for this trace", "Microseconds."],
+  [119, 2, "Gain type of field instruments", "1 fixed, 2 binary, 3 floating point."],
+  [125, 2, "Correlated", "1 no, 2 yes."],
+  [157, 2, "Year data was recorded", ""],
+  [159, 2, "Day of year", ""],
+  [181, 4, "CDP X coordinate", "Rev 1 position for the ensemble coordinate."],
+  [185, 4, "CDP Y coordinate", ""],
+  [189, 4, "Inline number", "3D only."],
+  [193, 4, "Crossline number", "3D only."]
+];
+
+/* Read one trace header. `index` counts traces in the file, not traces held
+   after decimation. */
+function readTraceHeader(ab, index, layout){
+  const dv = new DataView(ab);
+  const base = layout.start + index * layout.traceBytes;
+  const le = !layout.big;
+  const out = [];
+  for (const [pos, size, name, note] of TRACE_FIELDS){
+    const o = base + pos - 1;
+    if (o + size > ab.byteLength) break;
+    const v = size === 4 ? dv.getInt32(o, le) : dv.getInt16(o, le);
+    out.push({pos, size, name, note, value: v});
+  }
+  return out;
+}
+
+/* Which trace header fields carry anything, measured over the whole line
+   rather than guessed from the first trace. A field that is zero on every
+   trace was not filled in, and saying so is more use than printing a zero. */
+function scanTraceHeaders(ab, layout, ntr){
+  const dv = new DataView(ab);
+  const le = !layout.big;
+  const step = Math.max(1, Math.ceil(ntr / 2000));
+  const stat = TRACE_FIELDS.map(([pos, size, name, note]) =>
+    ({pos, size, name, note, min: Infinity, max: -Infinity, live: 0, n: 0}));
+  for (let i = 0; i < ntr; i += step){
+    const base = layout.start + i * layout.traceBytes;
+    for (let k = 0; k < stat.length; k++){
+      const f = stat[k];
+      const o = base + f.pos - 1;
+      if (o + f.size > ab.byteLength) continue;
+      const v = f.size === 4 ? dv.getInt32(o, le) : dv.getInt16(o, le);
+      f.n++;
+      if (v !== 0) f.live++;
+      if (v < f.min) f.min = v;
+      if (v > f.max) f.max = v;
+    }
+  }
+  return {fields: stat, sampled: Math.ceil(ntr / step), step};
+}
+
+/* Named fields out of the binary header, with where each one sits. */
+const BINARY_FIELDS = [
+  [3201, 4, "Job identification number", ""],
+  [3205, 4, "Line number", ""],
+  [3209, 4, "Reel number", ""],
+  [3213, 2, "Traces per ensemble", "1 on a stacked line."],
+  [3215, 2, "Auxiliary traces per ensemble", ""],
+  [3217, 2, "Sample interval", "Microseconds. What the whole file is read with."],
+  [3219, 2, "Sample interval of the original recording", ""],
+  [3221, 2, "Samples per trace", ""],
+  [3223, 2, "Samples per trace in the original recording", ""],
+  [3225, 2, "Data sample format code", "1 IBM float, 5 IEEE float, 3 is 16-bit integer."],
+  [3227, 2, "Ensemble fold", "How many traces were summed into each output trace."],
+  [3229, 2, "Trace sorting code", "4 is a stacked section, 2 is CDP ensembles."],
+  [3231, 2, "Vertical sum code", ""],
+  [3253, 2, "Correlated data traces", "1 no, 2 yes."],
+  [3255, 2, "Measurement system", "1 metres, 2 feet."],
+  [3257, 2, "Impulse signal polarity", "1 is an increase in pressure as a negative number."],
+  [3501, 2, "SEG-Y revision", "0 where the field was never written."],
+  [3503, 2, "Fixed length trace flag", ""],
+  [3505, 2, "Extended textual header records", "3200-byte blocks following the first."]
+];
+
+function readBinaryHeader(ab, big){
+  const dv = new DataView(ab);
+  const le = !big;
+  const out = [];
+  for (const [pos, size, name, note] of BINARY_FIELDS){
+    const o = pos - 1;
+    if (o + size > ab.byteLength) continue;
+    const v = size === 4 ? dv.getInt32(o, le) : dv.getInt16(o, le);
+    out.push({pos, size, name, note, value: v});
+  }
+  return out;
 }

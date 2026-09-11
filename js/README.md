@@ -12,6 +12,12 @@ it.
     assets/             style.css, glossary.css, page.css, count.js
     data/               the sample lines
 
+`segy.js` also carries the header readers: `TRACE_FIELDS` and `BINARY_FIELDS`
+give byte position, size, name and meaning for the fields worth showing;
+`readTraceHeader` reads one trace, `scanTraceHeaders` walks the line and
+reports what range each field covers and how many traces carry anything at
+all. Byte positions follow the standard, one-based and inclusive.
+
 `js/page.js` holds `BUILT_PAGES`. A link to a numbered step that is not in that
 list is left in place, marked, and made inert rather than sending a reader to a
 page that does not exist. Adding a page means adding its filename there.

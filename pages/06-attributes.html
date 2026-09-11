@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attributes — Working with deep reflection data</title>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/glossary.css">
+<link rel="stylesheet" href="../assets/page.css">
+</head>
+<body id="top">
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="brand" href="../index.html"><span class="dot"></span>
+      Working with <b>deep reflection data</b></a>
+    <nav>
+      <a href="../index.html">All steps</a>
+      <a href="05-balance.html">Back to balancing</a>
+      <a href="#" id="btnRef">Reference</a>
+    </nav>
+  </header>
+
+  <div class="mod-head">
+    <p class="eyebrow">Step 6 of 9</p>
+    <h1>Attributes</h1>
+    <p class="sub">An attribute is a number computed from the section at every
+      sample, giving a second image the same size as the first. Four families
+      are shown here, each measuring something different about the same
+      traces.</p>
+  </div>
+</div>
+
+<div class="labhead" id="labhead">
+  <div class="wrap">
+    <div class="labgrid">
+      <div>
+        <p class="cap">The section and the attribute
+          <span>&mdash; same axes, same traces</span></p>
+        <div class="panelrow" style="grid-template-columns:54px minmax(0,1fr) minmax(0,1fr)">
+          <canvas class="axY" id="axY"></canvas>
+          <figure>
+            <figcaption><span>Amplitude</span><b id="fromLabel">&mdash;</b></figcaption>
+            <canvas class="sect" id="cAmp"></canvas>
+          </figure>
+          <figure>
+            <figcaption><span id="attrTitle">Attribute</span></figcaption>
+            <canvas class="sect" id="cAttr"></canvas>
+            <canvas class="cbarH" id="cbar"></canvas>
+          </figure>
+          <p class="unitline" id="unitLine"></p>
+        </div>
+        <div class="axXrow" style="grid-template-columns:54px minmax(0,1fr)">
+          <span></span><canvas id="axX"></canvas></div>
+      </div>
+
+      <div class="controls">
+        <p class="cap">Display <span>&mdash; these change the picture, not the numbers</span></p>
+        <div class="ctl-col">
+          <div class="ctl">
+            <label for="cmap">Attribute color map</label>
+            <select id="cmap"></select>
+          </div>
+          <div class="check">
+            <input type="checkbox" id="cmapRev">
+            <label for="cmapRev" style="margin:0">Read the map the other way</label>
+          </div>
+          <div class="ctl">
+            <label>Amplitude polarity</label>
+            <input type="hidden" id="pol" value="1">
+            <div class="seg" id="polSeg">
+              <button type="button" data-v="1" aria-pressed="true">SEG normal</button>
+              <button type="button" data-v="-1" aria-pressed="false">Reverse</button>
+            </div>
+          </div>
+          <div class="ctl">
+            <label for="clip">Amplitude clip <span class="readout" id="clipR">98%</span></label>
+            <input type="range" id="clip" min="90" max="100" step="0.5" value="98">
+          </div>
+          <div class="ctl">
+            <label for="ph">Panel height <span class="readout" id="phR">380 px</span></label>
+            <input type="range" id="ph" min="240" max="900" step="20" value="380">
+          </div>
+          <div class="ctl">
+            <label for="vel">Depth scale <span class="readout" id="velR">6.0 km/s</span></label>
+            <input type="range" id="vel" min="0" max="8" step="0.5" value="6">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="guard" hidden></div>
+
+  <div class="modbar">
+    <span class="hint">Each tab is one family of attributes. The panel above
+      stays where it is.</span>
+    <button class="btn ghost small" type="button" id="btnPng">Save the panels as a picture</button>
+    <button class="btn ghost small" type="button" id="btnLink">Copy a link to this setup</button>
+  </div>
+
+  <div class="tab-wrap" id="tabwrap">
+    <div class="tabs">
+      <button aria-controls="pane-intro" aria-selected="true">Reading an attribute</button>
+      <button aria-controls="pane-amp">Amplitude and energy</button>
+      <button aria-controls="pane-freq">Frequency</button>
+      <button aria-controls="pane-phase">Phase</button>
+      <button aria-controls="pane-geom">Geometry</button>
+      <button aria-controls="pane-check">Check yourself</button>
+    </div>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-intro" role="tabpanel">
+      <p class="lede">An attribute is computed from the samples already in the
+        section. Nothing is added: every attribute image is a rearrangement of
+        what the recording and the processing left behind. What changes is
+        which part of it is placed in front of the eye.</p>
+
+      <p class="lede">The four families answer different questions. Amplitude
+        and energy attributes measure how much came back. Frequency attributes
+        measure the scale of the features that returned it. Phase attributes
+        discard amplitude entirely and show only where events are continuous.
+        Geometry attributes measure the orientation of the fabric rather than
+        its strength.</p>
+
+      <p class="lede">The panel above shows the amplitude section on the left
+        and the attribute on the right, on the same axes. An attribute read on
+        its own tends to be over-read. Read beside the amplitude it came from,
+        the question becomes whether the attribute is marking something the
+        amplitude section does not already show.</p>
+
+      <div class="miscon">
+        <h4>Attributes do not add information</h4>
+        <p>A colorful attribute image computed from a noisy section is a
+          colorful image of noise. If an event cannot be seen in the amplitude
+          panel at all, an attribute derived from that panel is not evidence
+          that it is there.</p>
+      </div>
+
+      <div class="tryit">
+        <h3>Try this</h3>
+        <ol>
+          <li>Open the amplitude and energy tab and leave it on the amplitude
+            volume transform, which is what the page starts with. Change the
+            window length and watch the scale of the banding change with it.</li>
+          <li>Switch to instantaneous phase in the phase tab. Every event now
+            has the same strength. Compare the lower half of the section
+            against the amplitude panel beside it.</li>
+        </ol>
+      </div>
+
+      <div class="whymatters">
+        <h4>Where this sits in the sequence</h4>
+        <p>The attributes on this page are computed from the section produced
+          by the earlier steps. The label beside the amplitude panel says which
+          stage that is. An attribute computed before filtering and the same
+          attribute computed after are different images, and the difference is
+          the filtering rather than the geology.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-amp" role="tabpanel" hidden>
+      <div class="apick" data-group="amp"></div>
+      <div class="adesc" id="desc-amp"></div>
+      <div class="paneCtl">
+        <div class="ctl">
+          <label for="attrWin">Window length <span class="readout" id="attrWinR">60 ms</span></label>
+          <input type="range" id="attrWin" min="16" max="400" step="4" value="60">
+        </div>
+        <div class="ctl">
+          <label for="attrWinI">Integration window <span class="readout" id="attrWinIR">200 ms</span></label>
+          <input type="range" id="attrWinI" min="50" max="1200" step="10" value="200">
+        </div>
+      </div>
+    </section>
+
+    <section class="tabpane" id="pane-freq" role="tabpanel" hidden>
+      <div class="apick" data-group="freq"></div>
+      <div class="adesc" id="desc-freq"></div>
+      <div class="paneCtl">
+        <div class="ctl">
+          <label for="attrFc">Center frequency <span class="readout" id="attrFcR">25 Hz</span></label>
+          <input type="range" id="attrFc" min="3" max="60" step="1" value="25">
+        </div>
+        <div class="ctl">
+          <label for="attrWin2">Window length <span class="readout" id="attrWin2R">60 ms</span></label>
+          <input type="range" id="attrWin2" min="16" max="400" step="4" value="60">
+        </div>
+      </div>
+    </section>
+
+    <section class="tabpane" id="pane-phase" role="tabpanel" hidden>
+      <div class="apick" data-group="phase"></div>
+      <div class="adesc" id="desc-phase"></div>
+      <div class="miscon">
+        <h4>A phase image always looks continuous</h4>
+        <p>Dividing amplitude out means a sample with no reflection in it is
+          displayed as strongly as one with a reflection. Phase images of the
+          deep part of a record, where there may be little signal, still show
+          banded continuity.</p>
+      </div>
+    </section>
+
+    <section class="tabpane" id="pane-geom" role="tabpanel" hidden>
+      <div class="apick" data-group="geom"></div>
+      <div class="adesc" id="desc-geom"></div>
+      <div class="paneCtl">
+        <div class="ctl">
+          <label for="attrDl">Dip window <span class="readout" id="attrDlR">5 traces</span></label>
+          <input type="range" id="attrDl" min="3" max="21" step="2" value="5">
+        </div>
+        <div class="ctl">
+          <label for="relAz">Light azimuth <span class="readout" id="relAzR">315°</span></label>
+          <input type="range" id="relAz" min="0" max="359" step="5" value="315">
+        </div>
+        <div class="ctl">
+          <label for="relAlt">Light elevation <span class="readout" id="relAltR">45°</span></label>
+          <input type="range" id="relAlt" min="10" max="80" step="5" value="45">
+        </div>
+        <div class="ctl">
+          <label for="relZ">Relief <span class="readout" id="relZR">1.00×</span></label>
+          <input type="range" id="relZ" min="0.1" max="4" step="0.1" value="1">
+        </div>
+        <div class="ctl">
+          <label for="relSm">Relief smoothing <span class="readout" id="relSmR">2</span></label>
+          <input type="range" id="relSm" min="0" max="8" step="1" value="2">
+        </div>
+        <div class="ctl">
+          <label for="relSurf">Surface</label>
+          <select id="relSurf">
+            <option value="amp">amplitude</option>
+            <option value="env">envelope</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="relNote" style="margin-top:.6rem"></p>
+    </section>
+
+    <!-- ------------------------------------------------------------ -->
+    <section class="tabpane" id="pane-check" role="tabpanel" hidden>
+      <p class="lede">Attribute images are persuasive. Most of the ways they
+        mislead are settled before the arithmetic runs, by what was computed
+        from and with which window. These are the questions worth holding
+        against whatever is on screen.</p>
+
+      <div class="check"><p><b>Which section did this come from?</b>
+        The label beside the amplitude panel says which stage. The same
+        attribute computed before and after f-k filtering gives two different
+        images, and the difference between them is the filter.</p></div>
+
+      <div class="check"><p><b>Is the feature visible in the amplitude panel?</b>
+        An attribute cannot recover an event that is not in the section it was
+        computed from. Where the attribute marks something the amplitude panel
+        shows nothing of, the first candidate is the estimator rather than the
+        rock.</p></div>
+
+      <div class="check"><p><b>How does the window compare with the wavelet?</b>
+        A window shorter than one wavelet measures the wavelet. A window longer
+        than the interval being examined averages across its boundaries.
+        Moving the slider and watching the scale of the pattern change shows
+        which regime the current setting is in.</p></div>
+
+      <div class="check"><p><b>Could the value be outside the band the file
+        holds?</b> An 8 ms sample interval puts the Nyquist frequency at 62.5
+        Hz. Frequency attributes reading well above that are reporting on
+        interference between events, not on frequencies in the data.</p></div>
+
+      <div class="check"><p><b>Which way does the structure strike?</b>
+        Coherence and the other lateral measures compare traces along the
+        profile. A fault striking with the line changes little from trace to
+        trace and produces little response, whatever its displacement.</p></div>
+
+      <div class="check"><p><b>Is the display doing the work?</b>
+        Clip percentile, color map and vertical exaggeration all change how
+        strong a pattern looks without changing a number. For relief shading
+        the shadow fraction under the geometry controls is the specific
+        check.</p></div>
+
+      <div class="check"><p><b>Are two of these the same measurement?</b>
+        Envelope, RMS amplitude and the amplitude volume transform are all
+        built from the magnitude of the analytic signal and differ mainly in
+        window length. Agreement between them is not confirmation.</p></div>
+
+      <div class="leftout">
+        <h4>What this page does not settle</h4>
+        <p>How much of a chosen set of attributes is redundant, which is
+          measured directly on the next page and matters before any of them are
+          fed to a classification.</p>
+        <p>Whether a pattern is present in the earth or produced by the
+          recording geometry. Two lines crossing the same structure, or a
+          comparison against independent data, is what separates those.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="pager">
+    <a class="btn" href="05-balance.html">&larr; Spectral balancing</a>
+    <a class="btn" href="07-compare.html">Several at once &rarr;</a>
+  </div>
+</div>
+
+<footer>
+  <div class="foot-grid">
+    <p><b>Working with deep reflection data</b><br>
+      Heather Bedle, University of Oklahoma</p>
+    <p class="lic">Text and figures <span class="k">CC BY-SA 4.0</span>.
+      Wyoming Line 1 is COCORP data in the public domain.</p>
+  </div>
+</footer>
+
+<script src="../js/segy.js"></script>
+<script src="../js/dsp.js"></script>
+<script src="../js/display.js"></script>
+<script src="../js/spectrum.js"></script>
+<script src="../js/measure.js"></script>
+<script src="../js/attributes.js"></script>
+<script src="../js/help.js"></script>
+<script src="../js/glossary.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/attr-text.js"></script>
+<script src="../assets/panelout.js"></script>
+<script src="../js/page.js"></script>
+<script>
+/* ---------------------------------------------------------------
+   The attributes page. One section is held; each tab computes one
+   attribute from it and draws it beside the amplitude it came from.
+   --------------------------------------------------------------- */
+
+let SEC = null;          // {data, nx, ns, dt, j0}
+let FROM = "";           // which stage it came from
+let CACHE = null;        // analytic signal and the rest, built once per section
+let TENSOR = null;       // built only when a geometry attribute asks for it
+let KEY = "avt";
+let RELZ_TOUCHED = false;   // relief height is measured until the slider is moved
+
+/* every control whose setting belongs in a shared link */
+const CONTROLS = ["cmap","cmapRev","pol","clip","ph","vel","attrWin",
+                  "attrWinI","attrFc","attrDl","relAz","relAlt","relZ",
+                  "relSm","relSurf"];
+let POL = 1;            // 1 is SEG normal, -1 draws a peak as a trough
+
+/* An attribute that straddles zero needs a map with a neutral middle; one that
+   is never negative does not, and a diverging map on it wastes half the scale.
+   The list offered follows whichever the current attribute is. */
+function cmapChoices(){
+  return (RES && RES.vmin < 0 && RES.vmax > 0) ? CMAP_DIVERGING : CMAP_SEQUENTIAL;
+}
+
+function fillCmaps(){
+  const sel = $("cmap"), keep = sel.value;
+  const list = cmapChoices();
+  sel.innerHTML = list.map(k =>
+    '<option value="' + k + '">' + CMAP_LABEL[k] + '</option>').join("");
+  sel.value = list.indexOf(keep) >= 0 ? keep
+            : (RES && list.indexOf(RES.cmapDefault) >= 0 ? RES.cmapDefault : list[0]);
+}
+
+/* A row of buttons behaving as one control. The value lives in a hidden input
+   so that it travels in the shared link with everything else, and so that a
+   link carrying it sets the buttons on the way in. */
+function segControl(segId, inputId, onPick){
+  const el = $(inputId);
+  const paint = () => $(segId).querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.v === el.value ? "true" : "false"));
+  $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    el.value = b.dataset.v;
+    paint();
+    stateWrite(CONTROLS);
+    onPick(el.value);
+  }));
+  paint();
+  onPick(el.value);
+}
+let RES = null;
+
+const PANE_GROUP = {"pane-amp":"amp", "pane-freq":"freq",
+                    "pane-phase":"phase", "pane-geom":"geom"};
+
+function readParams(){
+  const n = id => +$(id).value;
+  return {
+    attrWin:  n("attrWin"),
+    attrWinI: n("attrWinI"),
+    attrFc:   n("attrFc"),
+    attrDl:   n("attrDl"),
+    cmap:     $("cmap").value,
+    rev:      $("cmapRev").checked,
+    relSurf:  $("relSurf").value,
+    relAz:    n("relAz"),
+    relAlt:   n("relAlt"),
+    relZ:     n("relZ"),
+    relSm:    n("relSm"),
+    relZauto: !RELZ_TOUCHED,
+    clip:     n("clip"),
+    ph:       n("ph"),
+    vel:      n("vel")
+  };
+}
+
+function readouts(){
+  const p = readParams();
+  $("attrWinR").textContent  = p.attrWin + " ms";
+  $("attrWin2R").textContent = $("attrWin2").value + " ms";
+  $("attrWinIR").textContent = p.attrWinI + " ms";
+  $("attrFcR").textContent   = p.attrFc + " Hz";
+  $("attrDlR").textContent   = p.attrDl + " traces";
+  $("relAzR").textContent    = p.relAz + "\u00b0";
+  $("relAltR").textContent   = p.relAlt + "\u00b0";
+  $("relZR").textContent     = p.relZ.toFixed(2) + "\u00d7";
+  $("relSmR").textContent    = p.relSm;
+  $("clipR").textContent     = p.clip + "%";
+  $("phR").textContent       = panelHeight(p.ph) + " px";
+  $("velR").textContent      = p.vel > 0 ? p.vel.toFixed(1) + " km/s" : "off";
+}
+
+/* the two window sliders are the same quantity shown in two tabs */
+function linkWindows(src, dst){
+  $(src).addEventListener("input", () => { $(dst).value = $(src).value; recompute(); });
+}
+
+function buildPickers(){
+  for (const g of ATTR_GROUPS){
+    const host = document.querySelector('.apick[data-group="' + g.id + '"]');
+    if (!host) continue;
+    host.innerHTML = "";
+    for (const k of g.keys){
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = ATTR_META[k].n;
+      b.dataset.k = k;
+      b.setAttribute("aria-pressed", k === KEY ? "true" : "false");
+      b.addEventListener("click", () => { KEY = k; syncPickers(); recompute(); });
+      host.appendChild(b);
+    }
+  }
+}
+
+function syncPickers(){
+  document.querySelectorAll(".apick button").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.k === KEY ? "true" : "false"));
+  for (const g of ATTR_GROUPS){
+    const host = $("desc-" + g.id);
+    if (!host) continue;
+    const k = g.keys.indexOf(KEY) >= 0 ? KEY : g.keys[0];
+    const t = ATTR_TEXT[k] || {};
+    host.innerHTML =
+      '<h4>What it measures</h4><p>' + (t.measures || "") + '</p>' +
+      '<h4>In the crust</h4><p>' + (t.crust || "") + '</p>' +
+      (t.watch ? '<div class="watch"><h4>Where the number stops meaning that</h4><p>' +
+                 t.watch + '</p></div>' : "");
+  }
+  glossaryScan(document.querySelector(".tab-wrap"));
+}
+
+function sizeCanvas(){
+  const p = readParams();
+  const h = panelHeight(p.ph) + "px";
+  ["cAmp","cAttr","axY","cbar"].forEach(id => { $(id).style.height = h; });
+  DISPLAY_H = Math.max(60, Math.round(panelHeight(p.ph) * (window.devicePixelRatio || 1)));
+}
+
+function recompute(){
+  readouts();
+  if (!SEC) return;
+  const p = readParams();
+  const {nx, ns, dt} = SEC;
+
+  if (ATTR_NEEDS_TENSOR[KEY] && !TENSOR)
+    TENSOR = computeTensor(SEC.data, nx, ns, Math.max(1, p.attrDl / 3));
+  if (!CACHE || CACHE.tensor !== TENSOR)
+    CACHE = attrCache(SEC.data, nx, ns, dt, TENSOR);
+
+  RES = computeOne(KEY, p, CACHE);
+  draw_all();
+}
+
+function draw_all(){
+  if (!SEC) return;
+  const p = readParams();
+  const {nx, ns, dt, j0} = SEC;
+  sizeCanvas();
+
+  // amplitude panel, always gray, clipped at a percentile so a few large
+  // samples do not compress everything else into the middle of the scale
+  const clip = percentileAbs(SEC.data, p.clip) || 1e-30;
+  draw($("cAmp"), SEC.data, nx, ns, POL * -clip, POL * clip, buildLUT("gray"));
+
+  if (!RES){ return; }
+  $("attrTitle").textContent = RES.title;
+  fillCmaps();
+  $("unitLine").textContent = RES.unit || "";
+
+  if (RES.rgb){
+    drawRGB($("cAttr"), RES.rgb, RES.scales, nx, ns);
+    // three channels have no one scale to put on a bar; the caption under the
+    // panel already names the three frequencies
+    fitCanvas($("cbar"));
+  } else {
+    const base = buildLUT(p.cmap || RES.cmapDefault);
+    const lut = p.rev ? reverseLUT(base) : base;
+    drawRange($("cAttr"), RES.a, nx, ns, RES.vmin, RES.vmax, lut);
+    drawColorbarH("cbar", RES.vmin, RES.vmax, lut, RES.title, RES.cbLabel || "");
+  }
+
+  const t0 = (j0 || 0) * dt * 1e-3;
+  const t1 = ((j0 || 0) + ns) * dt * 1e-3;
+  drawYAxis("axY", t0 / 1000, t1 / 1000, "two-way time (s)", 1, p.vel > 0 ? p.vel : 0);
+  drawXAxis("axX", 1, nx, "trace");
+
+  if (RES.relZUsed != null && !RELZ_TOUCHED){
+    $("relZ").value = RES.relZUsed;
+    $("relZR").textContent = RES.relZUsed.toFixed(2) + "\u00d7";
+  }
+
+  const nt = $("relNote");
+  if (nt){
+    nt.textContent = (RES.shadowPct == null) ? "" :
+      RES.shadowPct.toFixed(1) + "% of the image is in full shadow." +
+      (RES.shadowPct > 4
+        ? " Above a few percent the surface is too steep and the shading follows the corrugation of the wavelet rather than the structure."
+        : " A gently undulating surface, which is the regime this display works in.");
+  }
+}
+
+function useSection(sec, from){
+  SEC = sec; FROM = from;
+  CACHE = null; TENSOR = null;
+  $("fromLabel").textContent = STAGE_LABEL[from] || from;
+  recompute();
+}
+
+pageReady(() => {
+  buildPickers();
+  fillCmaps();
+  syncPickers();
+  readouts();
+
+  setupTabs($("tabwrap"), paneId => {
+    const g = PANE_GROUP[paneId];
+    if (!g) return;
+    const grp = ATTR_GROUPS.find(x => x.id === g);
+    if (grp && grp.keys.indexOf(KEY) < 0){ KEY = grp.keys[0]; syncPickers(); recompute(); }
+    stackSticky();
+  });
+
+  CONTROLS.forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener("input", () => {
+      stateWrite(CONTROLS);
+      if (id === "attrDl") TENSOR = null;      // the tensor depends on this one
+      if (id === "relZ") RELZ_TOUCHED = true;
+      recompute();
+    });
+  });
+  segControl("polSeg", "pol", v => { POL = +v; draw_all(); });
+  linkWindows("attrWin2", "attrWin");
+  linkWindows("attrWin", "attrWin2");
+
+  $("btnPng").addEventListener("click", () =>
+    savePanelPNG(["cAmp", "cAttr"], "attribute-" + KEY));
+  $("btnLink").addEventListener("click", e => copyPageLink(e.currentTarget));
+
+  window.addEventListener("resize", () => { sizeCanvas(); draw_all(); stackSticky(); });
+
+  stateWrite(stateRead(CONTROLS));
+  pageChrome();
+
+  resolveStage("balance").then(r => {
+    if (r && r.section) useSection(r.section, r.from);
+    else stageGuard($("guard"), "balance", seg =>
+      useSection({data: seg.data, nx: seg.nx, ns: seg.ns, dt: seg.dt, j0: seg.j0 || 0}, "raw"));
+  }).catch(() => {
+    stageGuard($("guard"), "balance", seg =>
+      useSection({data: seg.data, nx: seg.nx, ns: seg.ns, dt: seg.dt, j0: seg.j0 || 0}, "raw"));
+  });
+});
+</script>
+<script src="../assets/count.js"></script>
+</body>
+</html>
