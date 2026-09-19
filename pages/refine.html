@@ -32,7 +32,10 @@
   }
   window.addEventListener("error", function(e){
     var t = e.target;
-    if (t && t !== window && (t.src || t.href)){ if (t.tagName === "SCRIPT") show("Not found: " + t.src); return; }
+    // only this site's own scripts: the page counter is often blocked by
+    // privacy settings, which does not affect the tool
+    if (t && t !== window && (t.src || t.href)){ if (t.tagName === "SCRIPT" && t.src.indexOf(location.origin) === 0) show("Not found: " + t.src); return; }
+    if (e.filename && e.filename.indexOf(location.origin) !== 0) return;
     show(e.message + (e.filename ? " (" + e.filename.split("/").pop() + ", line " + e.lineno + ")" : ""));
   }, true);
   window.addEventListener("unhandledrejection", function(e){ show(String(e.reason && e.reason.message || e.reason)); });

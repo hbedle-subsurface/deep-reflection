@@ -50,7 +50,7 @@ const OPTIONAL = STEPS.filter(s => s.stage && s.id !== "line");
 
 
 let LINE = null;       // {name, file, nx, ns, dt, delayMs, dx, dist}
-let DISP = {cmap:"gray", clip:99, gain:1, polarity:1, ve:0};
+let DISP = {cmap:"gray", clip:99, gain:1, polarity:1, ve:0, hscale: SITE.panelScale || 1};
 let VMODEL = null;     // the 1D velocity model, where the site shows depth
 const PREFIX = location.pathname.includes("/pages/") ? "../" : "";
 
@@ -133,6 +133,15 @@ async function pageShell(stepId){
   foot.innerHTML =
     "<p>The file is read in this browser and never uploaded. " + SITE.title + ", Heather Bedle, University of Oklahoma, with the AASPI consortium. " +
     'Content <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. ' + SITE.dataCredit + "</p>";
+  // the case brief for this step: what has to be weighed and worked out
+  const brief = SITE.briefs && SITE.briefs[stepId];
+  const stage = document.querySelector("main.stage");
+  if (brief && stage){
+    const b = document.createElement("div");
+    b.className = "brief";
+    b.innerHTML = "<h3>The question at this step</h3><p>" + brief + "</p>";
+    stage.prepend(b);
+  }
   // step numbers written into static text, so one page serves both sites
   document.querySelectorAll("[data-step]").forEach(el => { el.textContent = stepNo(el.dataset.step); });
   document.querySelectorAll("a[data-step-link]").forEach(el => {
@@ -303,7 +312,8 @@ function viewBar(host, selectLabel, opts){
       '<button id="vbSel" aria-pressed="true">Drag to ' + selectLabel + '</button>' +
       '<button id="vbZoom" aria-pressed="false">Drag to zoom</button></div>' : "") +
     '<span class="readout" id="vbText">' + (selectLabel ? "" : "Drag a box on any panel to zoom in.") + "</span>";
-  host.prepend(bar);
+  const br = host.querySelector(":scope > .brief");
+  if (br) br.after(bar); else host.prepend(bar);
   foldButtons(bar);
   DRAGMODE = selectLabel ? "select" : "zoom";
   if (!onLine) kvGet("crop").then(c => {
@@ -344,7 +354,7 @@ function makePanel(host, id, title, opts){
   el.innerHTML =
     '<div class="cap"><h3 id="' + id + '-title">' + title + '</h3><span class="pnote" id="' + id + '-note"></span>' +
       (opts.tools ? '<span class="ptools" id="' + id + '-tools"></span>' : "") + "</div>" +
-    '<div class="plot' + (SITE.depthScale ? " withdepth" : "") + '" style="--ph:' + (opts.height || 300) + 'px" data-ph="' + (opts.height || 300) + '">' +
+    '<div class="plot' + (SITE.depthScale ? " withdepth" : "") + '" style="--ph:' + Math.round((opts.height || 300) * (DISP.hscale || 1)) + 'px" data-ph="' + (opts.height || 300) + '">' +
       '<canvas class="yax" id="' + id + '-y"></canvas>' +
       '<div class="frame crosshair" id="' + id + '-frame">' +
         '<canvas class="img" id="' + id + '-img"></canvas>' +
@@ -401,10 +411,10 @@ function drawDepthAxis(id, e){
     ctx.beginPath(); ctx.moveTo(0, my + .5); ctx.lineTo(w, my + .5); ctx.stroke();
     ctx.fillText("Moho", 7, my - 6);
   }
-  ctx.save(); ctx.translate(w - 10, h / 2); ctx.rotate(Math.PI / 2);
+  ctx.save(); ctx.translate(40, h / 2); ctx.rotate(Math.PI / 2);
   ctx.fillStyle = AX.label; ctx.font = AX.labelFont; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const ve = veOf(id, e);
-  ctx.fillText("depth (km)" + (ve ? ", VE " + ve.toFixed(1) + " : 1" : ""), 0, 0); ctx.restore();
+  ctx.fillText("depth (km)" + (ve ? ", VE " + (ve >= 1 ? ve.toFixed(1) : ve.toPrecision(2)) + " : 1" : ""), 0, 0); ctx.restore();
 }
 
 /* Vertical exaggeration of what is on screen: the vertical scale in depth
@@ -421,7 +431,7 @@ function applyVE(id, sub){
   if (!SITE.depthScale || !VMODEL) return;
   const plot = $(id + "-frame").parentElement;
   const base = +plot.dataset.ph || 300;
-  if (!DISP.ve){ plot.style.setProperty("--ph", base + "px"); return; }
+  if (!DISP.ve){ plot.style.setProperty("--ph", Math.round(base * (DISP.hscale || 1)) + "px"); return; }
   const e = extentOf(sub), w = $(id + "-frame").getBoundingClientRect().width;
   const zr = depthAtTime(e.t1, VMODEL) - depthAtTime(e.t0, VMODEL), xr = Math.abs(e.x1 - e.x0);
   if (!(zr > 0 && xr > 0 && w > 0)) return;
@@ -605,6 +615,8 @@ function displayControls(host, onChange){
     '<label for="dGain">Display gain <b><span id="v-dGain"></span>×</b></label>' +
     '<input type="range" id="dGain" min="0.25" max="4" step="0.05">' +
     '<label class="toggle"><input type="checkbox" id="dPol"> Reverse polarity</label>' +
+    '<label for="dH">Panel height <b><span id="v-dH"></span>×</b></label>' +
+    '<input type="range" id="dH" min="0.6" max="3" step="0.1">' +
     (SITE.depthScale ? '<label for="dVe">Vertical exaggeration</label><select id="dVe">' +
       '<option value="0">Fit the panel</option><option value="1">1 : 1, true scale</option><option value="2">2 : 1</option>' +
       '<option value="4">4 : 1</option><option value="8">8 : 1</option></select>' +
@@ -614,17 +626,18 @@ function displayControls(host, onChange){
     $("dCmap").value = DISP.cmap; $("dClip").value = DISP.clip; $("dGain").value = DISP.gain;
     $("dPol").checked = DISP.polarity < 0;
     if ($("dVe")) $("dVe").value = DISP.ve || 0;
+    $("dH").value = DISP.hscale || 1; $("v-dH").textContent = (+DISP.hscale || 1).toFixed(1);
     $("v-dClip").textContent = (+DISP.clip).toFixed(1);
     $("v-dGain").textContent = (+DISP.gain).toFixed(2);
   };
   sync();
   const upd = () => {
     DISP = {cmap: $("dCmap").value, clip: +$("dClip").value, gain: +$("dGain").value,
-            polarity: $("dPol").checked ? -1 : 1, ve: $("dVe") ? +$("dVe").value : 0};
+            polarity: $("dPol").checked ? -1 : 1, ve: $("dVe") ? +$("dVe").value : 0, hscale: +$("dH").value};
     sync(); kvSet("display", DISP).catch(() => {});
     onChange();
   };
-  ["dCmap", "dClip", "dGain", "dPol", "dVe"].forEach(k => { if ($(k)) $(k).addEventListener("input", upd); });
+  ["dCmap", "dClip", "dGain", "dPol", "dVe", "dH"].forEach(k => { if ($(k)) $(k).addEventListener("input", upd); });
 }
 
 /* ---------- small line plots on fixed axes ---------- */

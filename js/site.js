@@ -18,6 +18,24 @@ const SITE = {
   deepSteps: true,
   depthScale: true,
   theme: "cork",
+  // taller panels: a deep record is long in time for its length along the line
+  panelScale: 1.6,
+  // the question at each step, shown at the top of its page
+  briefs: {
+    "line": "Which part of the line holds the question, and what the file says about itself. The headers give the sample interval, the record length and whether the traces carry any geometry; the crop decides what every later step works on, and the velocity model sets how two-way time reads as depth.",
+    "gain": "How much amplitude the record loses with time, and whether the archive copy already has a gain on it. A time gain that matches the decay makes deep reflections comparable with shallow ones without changing how bright one trace is next to its neighbor.",
+    "bandwidth": "Which frequencies carry signal, and how that band narrows down a 20 s record. Every window length and filter corner in the later steps is set against this band, so a filter set outside it works on noise.",
+    "fk": "Whether steep noise and steep geology can be told apart on this line. Crustal thrusts and shear zones can dip as steeply as the noise trains; the removed panel shows whether a dip limit has taken out anything with the geometry of a reflector.",
+    "mig": "Where dipping reflections and diffractions actually belong, and how steep a reflector really is. The section is unmigrated, so dips read off it are too gentle and events are displaced updip; one migration velocity is right at one time only.",
+    "sos": "How much lateral smoothing the reflections can take before faults, terminations and short lower-crustal lamellae are averaged away. The checks rise once the removed panel starts to carry reflections.",
+    "balance": "Whether the loss of high frequencies down the record can be made up without raising noise to the level of the signal. The band at depth sets how far balancing can go.",
+    "multiples": "Whether a bright deep event is a reflection from the lower crust or energy from a shallow interface arriving a second time. This was the argument over the deep events on COCORP Wyoming Line 1, and the predicted curves test it on the line itself.",
+    "reflectivity": "How reflective the upper and lower crust are, and how the reflections are shaped: long and flat, short and dipping, or absent. The numbers compare zones on one line, since every threshold is set relative to this section.",
+    "attributes": "Which measurements separate the character of different parts of the crust, and which only repeat each other. Attributes that correlate strongly count as one measurement in the classification that follows.",
+    "som": "Whether the section falls into groups with a spatial pattern of their own. The null test says whether the groups are more organized along the line than they would be with the lateral information scrambled out.",
+    "shap": "Which attributes decide where each sample lands on the map. An attribute with a short bar contributes little, and two that share the same information split the credit.",
+    "refine": "Whether the classes hold up when the attribute set changes. Classes that survive a change of attributes rest on more than one measurement."
+},
   // analysis window for spectra, ms: long records and low frequencies
   specWinMs: 400,
   // trace spacing offered when the headers carry no coordinates, m
