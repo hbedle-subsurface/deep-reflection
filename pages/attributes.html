@@ -11,6 +11,27 @@
 <title>Attributes </title>
 </head>
 <body>
+<script>
+/* If a script fails to load or throws, say so on the page instead of leaving
+   it half drawn: usually a file missing from the server or an old copy held
+   in the browser cache. */
+(function(){
+  function show(msg){
+    var d = document.getElementById("loadfail");
+    if (!d){ d = document.createElement("div"); d.id = "loadfail";
+      d.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;background:#fbf7ea;color:#2b1d10;border-left:5px solid #a3261c;padding:10px 14px;font:14px/1.4 Arial,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.4)";
+      d.innerHTML = "<b>The page did not load completely.</b> A hard refresh (Ctrl+Shift+R, or Cmd+Shift+R on a Mac) clears an old copy from the browser cache; if that does not help, a file is missing from the site.<ul style='margin:6px 0 0 18px;padding:0'></ul>";
+      (document.body || document.documentElement).appendChild(d); }
+    var li = document.createElement("li"); li.textContent = msg; d.querySelector("ul").appendChild(li);
+  }
+  window.addEventListener("error", function(e){
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)){ if (t.tagName === "SCRIPT") show("Not found: " + t.src); return; }
+    show(e.message + (e.filename ? " (" + e.filename.split("/").pop() + ", line " + e.lineno + ")" : ""));
+  }, true);
+  window.addEventListener("unhandledrejection", function(e){ show(String(e.reason && e.reason.message || e.reason)); });
+})();
+</script>
 <div class="dash">
   <aside class="side" id="side">
     <h2>Attributes<button class="help" data-help="compare">Learn more</button></h2>

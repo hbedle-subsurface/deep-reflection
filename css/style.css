@@ -223,72 +223,106 @@ footer.foot p{margin:2px 0}
 .card .refs li{margin-bottom:4px}
 
 /* =================== corkboard theme (Cold Case) ===================
-   Used where SITE.theme is "cork". The section panels become photographs
-   taped to a corkboard, the controls stay as pinned cards, and the header is
-   a case-file label. Everything is scoped to body.theme-cork. */
+   Used where SITE.theme is "cork", after the Geo-Detective board: a dark
+   case-file header, a framed corkboard below it, the section panels as paper
+   exhibits taped to the board, and the controls as pinned cards. */
 body.theme-cork{
-  --board:#b68a5a; --board-2:#a47a4d; --line:rgba(62,40,20,.35);
+  --board:#8e6a45; --line:rgba(40,26,14,.35);
   --chalk:#2b1d10; --chalk-dim:#4d3722;
-  --tape:rgba(236,226,190,.78);
-  background-color:#b68a5a;
-  background-image:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .30  0 0 0 0 .19  0 0 0 0 .08  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
-    radial-gradient(circle at 20% 30%, rgba(255,230,190,.18), transparent 60%),
-    radial-gradient(circle at 80% 70%, rgba(80,50,20,.18), transparent 55%);
+  --tape:rgba(232,222,188,.72);
+  --paperx:#f6f0e1;
+  background:#1f1914;
   color:var(--chalk);
+  font-family:Georgia,"Times New Roman",serif;
 }
-body.theme-cork a{color:#7a1a12}
-body.theme-cork .bar{background:linear-gradient(#e4c888,#d8b872);border-bottom:3px solid #8a6a3a;box-shadow:0 3px 10px rgba(0,0,0,.25)}
-body.theme-cork .case h1{font-family:"Special Elite","Courier New",monospace;font-weight:400;letter-spacing:.02em;color:#2b1d10}
-body.theme-cork .case h1 a::after{content:"COLD CASE";display:inline-block;margin-left:14px;padding:2px 8px;border:3px solid #a3261c;color:#a3261c;
-  font-family:"Special Elite","Courier New",monospace;font-size:.8rem;letter-spacing:.12em;transform:rotate(-6deg);opacity:.85;vertical-align:middle}
-body.theme-cork .case p{color:#4d3722;font-style:italic}
-body.theme-cork .tag{box-shadow:0 2px 4px rgba(0,0,0,.25)}
-body.theme-cork .tag.methods{background:#2b1d10;color:#e4c888;border-color:#2b1d10}
+body.theme-cork a{color:#8a2016}
 
-/* the panels are photographs: white border, shadow, and tape at two corners */
-body.theme-cork .panel{position:relative;background:#111;border:7px solid #f4efe4;border-bottom-width:12px;box-shadow:0 6px 14px rgba(0,0,0,.4);margin-top:10px}
+/* header: a dark band, cream title */
+body.theme-cork .bar{background:linear-gradient(#2c231b,#1f1914);border-bottom:1px solid #000;padding-bottom:14px}
+body.theme-cork .case h1{font-family:"Special Elite","Courier New",monospace;font-weight:400;font-size:2.1rem;letter-spacing:.02em;color:#f1e6cc}
+body.theme-cork .case h1 a::after{content:"COLD CASE";display:inline-block;margin-left:14px;padding:2px 8px;border:3px solid #c8362d;color:#e0584c;
+  font-family:"Special Elite","Courier New",monospace;font-size:.8rem;letter-spacing:.12em;transform:rotate(-6deg);opacity:.9;vertical-align:middle}
+body.theme-cork .case p{color:#c9b89a;font-style:italic}
+body.theme-cork .case h1 a{color:#f1e6cc}
+body.theme-cork .tag{background:#e7d3a6;color:#2b1d10;opacity:.72;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+body.theme-cork .tag:hover{opacity:.9}
+body.theme-cork .tag[aria-current="page"]{opacity:1;background:#f3e3bb;box-shadow:0 0 0 2px #c8362d,0 2px 0 rgba(0,0,0,.4)}
+body.theme-cork .tag.methods{background:transparent;color:#f1e6cc;border:1px solid #8a7658;opacity:1;box-shadow:none}
+
+/* the board: framed cork with the small pits of real cork, and a plaque */
+body.theme-cork .dash,body.theme-cork .landing{
+  position:relative;margin:26px 14px 10px;padding:30px 22px 22px;
+  background-color:#8e6a45;
+  background-image:
+    radial-gradient(rgba(40,24,10,.55) 1px, transparent 1.6px),
+    radial-gradient(rgba(255,230,190,.18) 1px, transparent 1.8px),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .28  0 0 0 0 .17  0 0 0 0 .07  0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size:9px 9px, 13px 13px, 260px 260px;
+  background-position:0 0, 4px 6px, 0 0;
+  border:12px solid #4a3220;
+  border-image:linear-gradient(135deg,#5b3d25,#3b2717 40%,#5b3d25 70%,#3a2616) 1;
+  box-shadow:inset 0 0 40px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.6);
+}
+body.theme-cork .dash::before{content:"Case board";position:absolute;top:-19px;left:50%;transform:translateX(-50%);
+  background:#2a211a;color:#e7d3a6;font-family:"Special Elite","Courier New",monospace;font-size:1rem;letter-spacing:.05em;
+  padding:4px 22px;border:1px solid #6b5438;box-shadow:0 3px 6px rgba(0,0,0,.5);z-index:3}
+body.theme-cork .landing{padding:34px 22px 26px}
+body.theme-cork .landing::before{content:"Case files";position:absolute;top:-19px;left:50%;transform:translateX(-50%);
+  background:#2a211a;color:#e7d3a6;font-family:"Special Elite","Courier New",monospace;font-size:1rem;letter-spacing:.05em;
+  padding:4px 22px;border:1px solid #6b5438;box-shadow:0 3px 6px rgba(0,0,0,.5);z-index:3}
+
+/* the panels are paper exhibits, labeled in order, taped at two corners */
+body.theme-cork main.stage{counter-reset:exhibit}
+body.theme-cork .panel{position:relative;background:var(--paperx);border:0;padding:14px 12px 8px 4px;margin-top:14px;
+  box-shadow:0 1px 0 #d9cba2, 0 8px 18px rgba(0,0,0,.45);counter-increment:exhibit}
 body.theme-cork .panel::before,body.theme-cork .panel::after,
 body.theme-cork .plotbox::before,body.theme-cork .fig::before,body.theme-cork .note::before{
-  content:"";position:absolute;width:86px;height:22px;background:var(--tape);box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2;pointer-events:none}
-body.theme-cork .panel::before{top:-14px;left:18px;transform:rotate(-4deg)}
-body.theme-cork .panel::after{top:-12px;right:22px;transform:rotate(5deg)}
-body.theme-cork .panel .cap h3{font-family:"Special Elite","Courier New",monospace;font-weight:400;color:#f4efe4}
-body.theme-cork .panel .cap .pnote{color:#c9c2b2}
+  content:"";position:absolute;width:70px;height:26px;background:var(--tape);box-shadow:0 1px 2px rgba(0,0,0,.2);z-index:2;pointer-events:none}
+body.theme-cork .panel::before{top:-10px;left:-18px;transform:rotate(-38deg)}
+body.theme-cork .panel::after{top:-10px;right:-18px;transform:rotate(38deg)}
+body.theme-cork .panel .cap h3{font-family:"Special Elite","Courier New",monospace;font-weight:400;color:#8a2016;font-size:1.05rem}
+body.theme-cork .panel .cap h3::before{content:"Exhibit " counter(exhibit, upper-alpha) " · "}
+body.theme-cork .panel .cap .pnote{color:#5a4a36;font-family:Georgia,serif;font-style:italic}
+body.theme-cork .panel .cap .pnote b{color:#2b1d10}
+body.theme-cork .plot .frame{background:#ded6c4;box-shadow:inset 0 0 0 1px #b9ad93}
 body.theme-cork .plot .ro{color:#dfe6e9}
 
-body.theme-cork .plotbox{position:relative;box-shadow:0 5px 12px rgba(0,0,0,.35)}
-body.theme-cork .plotbox::before{top:-11px;left:50%;margin-left:-43px;transform:rotate(-2deg)}
-body.theme-cork .figrow h3,body.theme-cork .board-h3{font-family:"Special Elite","Courier New",monospace;font-weight:400;color:#2b1d10}
+body.theme-cork .plotbox{position:relative;box-shadow:0 8px 18px rgba(0,0,0,.45);border-bottom:0}
+body.theme-cork .plotbox::before{top:-12px;left:50%;margin-left:-35px;transform:rotate(-3deg)}
+body.theme-cork .figrow h3,body.theme-cork .board-h3{font-family:"Special Elite","Courier New",monospace;font-weight:400;color:#f3e3bb;
+  text-shadow:0 1px 2px rgba(0,0,0,.6)}
 
-/* notes under the panels: a strip of lined paper taped on */
-body.theme-cork .note{position:relative;background:#fbf7ea;color:#2b1d10;border-left:0;padding:14px 14px 10px;margin-top:18px;
-  background-image:repeating-linear-gradient(transparent 0 23px, rgba(90,120,170,.25) 23px 24px);box-shadow:0 4px 10px rgba(0,0,0,.3);max-width:80ch}
-body.theme-cork .note::before{top:-11px;left:24px;transform:rotate(-3deg)}
-body.theme-cork .note b{color:#7a1a12}
+/* notes under the panels: lined paper, taped */
+body.theme-cork .note{position:relative;background:#fbf7ea;color:#2b1d10;border-left:0;padding:14px 16px 10px;margin-top:22px;font-family:Georgia,serif;
+  background-image:repeating-linear-gradient(transparent 0 23px, rgba(90,120,170,.25) 23px 24px);box-shadow:0 8px 18px rgba(0,0,0,.45);max-width:80ch}
+body.theme-cork .note::before{top:-12px;left:24px;transform:rotate(-4deg)}
+body.theme-cork .note b{color:#8a2016}
 
-/* the cards lean a little, as pinned notes do */
-body.theme-cork .dash > aside.side > .card:nth-child(odd){transform:rotate(-.5deg)}
-body.theme-cork .dash > aside.side > .card:nth-child(even){transform:rotate(.6deg)}
-body.theme-cork .card{box-shadow:0 5px 12px rgba(0,0,0,.35)}
-body.theme-cork .card h2{font-family:"Special Elite","Courier New",monospace;font-weight:400}
+/* pinned cards */
+body.theme-cork .card{background:#f3e9cf;box-shadow:0 8px 18px rgba(0,0,0,.45);border-bottom:0;font-family:Georgia,serif}
+body.theme-cork .card::before{width:14px;height:14px;margin-left:-7px;top:-7px;background:radial-gradient(circle at 35% 35%,#ff6a5a,#b3221a 60%,#6d120c);box-shadow:0 3px 3px rgba(0,0,0,.45)}
+body.theme-cork .dash > aside.side > .card:nth-child(odd){transform:rotate(-.4deg)}
+body.theme-cork .dash > aside.side > .card:nth-child(even){transform:rotate(.5deg)}
+body.theme-cork .card h2{font-family:Georgia,"Times New Roman",serif;font-weight:700}
+body.theme-cork .card label,body.theme-cork .card .hint,body.theme-cork .card .guide{font-family:Georgia,serif}
 body.theme-cork .fig{position:relative;padding-top:6px}
-body.theme-cork .fig::before{top:-4px;left:50%;margin-left:-43px;transform:rotate(2deg)}
-body.theme-cork .fig img{border:5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.3)}
+body.theme-cork .fig::before{top:-4px;left:50%;margin-left:-35px;transform:rotate(3deg)}
+body.theme-cork .fig img{border:6px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.35)}
 
-body.theme-cork .seg{border-color:rgba(43,29,16,.5);background:rgba(251,247,234,.55)}
+/* zoom bar and status sit on the cork */
+body.theme-cork .seg{border-color:#3a2716;background:rgba(246,240,225,.85)}
 body.theme-cork .seg button{color:#2b1d10}
-body.theme-cork .seg button[aria-pressed="true"]{background:#2b1d10;color:#f4efe4}
-body.theme-cork .readout,body.theme-cork .status{color:#3a2716}
-body.theme-cork .status b{color:#2b1d10}
-body.theme-cork .busy{color:#a3261c;font-weight:600}
-body.theme-cork main .btnrow button,body.theme-cork .nextstep a{box-shadow:0 2px 5px rgba(0,0,0,.3)}
-body.theme-cork .empty{box-shadow:0 5px 12px rgba(0,0,0,.35)}
-body.theme-cork .banner{box-shadow:0 5px 12px rgba(0,0,0,.35)}
-body.theme-cork footer.foot{color:#3a2716;border-top-color:var(--line)}
-body.theme-cork footer.foot a{color:#7a1a12}
-body.theme-cork .landing .lede{background:#fbf7ea;color:#2b1d10;border-left:4px solid #a3261c;padding:10px 14px;box-shadow:0 4px 10px rgba(0,0,0,.3);max-width:70ch}
-body.theme-cork .steps h4{font-family:"Special Elite","Courier New",monospace;color:#2b1d10}
-body.theme-cork .steps a{box-shadow:0 3px 8px rgba(0,0,0,.3)}
-body.theme-cork main select{background:#fbf7ea;color:#2b1d10;border-color:rgba(43,29,16,.5)}
-body.theme-cork main .row2 label{color:#3a2716}
+body.theme-cork .seg button[aria-pressed="true"]{background:#2b1d10;color:#f3e3bb}
+body.theme-cork .readout,body.theme-cork .status{color:#f3e3bb;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+body.theme-cork .status b{color:#fff}
+body.theme-cork .busy{color:#ffd166;font-weight:600}
+body.theme-cork main .btnrow button,body.theme-cork .nextstep a{box-shadow:0 3px 6px rgba(0,0,0,.4)}
+body.theme-cork .empty,body.theme-cork .banner{box-shadow:0 8px 18px rgba(0,0,0,.45)}
+body.theme-cork table.data{box-shadow:0 6px 14px rgba(0,0,0,.4)}
+body.theme-cork footer.foot{color:#b8a684;border-top-color:#3a2d22}
+body.theme-cork footer.foot a{color:#e7d3a6}
+body.theme-cork .landing .lede{background:#fbf7ea;color:#2b1d10;border-left:4px solid #c8362d;padding:10px 14px;box-shadow:0 8px 18px rgba(0,0,0,.45);max-width:70ch;font-family:Georgia,serif}
+body.theme-cork .steps h4{font-family:"Special Elite","Courier New",monospace;color:#f3e3bb}
+body.theme-cork .steps a{box-shadow:0 5px 12px rgba(0,0,0,.4)}
+body.theme-cork main select{background:#fbf7ea;color:#2b1d10;border-color:#3a2716}
+body.theme-cork main .row2 label{color:#f3e3bb}

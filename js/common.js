@@ -102,6 +102,9 @@ async function pageShell(stepId){
   LINE = await kvGet("line");
   if (SITE.depthScale && typeof VMODEL_DEFAULT !== "undefined") VMODEL = (await kvGet("vmodel")) || Object.assign({}, VMODEL_DEFAULT);
   if (SITE.theme) document.body.classList.add("theme-" + SITE.theme);
+  // on the paper exhibits the axes are ink rather than chalk
+  if (SITE.theme === "cork") AX = {rule:"#b9ad93", tick:"#4d3722", label:"#2b1d10", accent:"#a3261c",
+    font:"11px Georgia, serif", labelFont:"12px Georgia, serif"};
   const d = await kvGet("display");
   if (d) DISP = Object.assign(DISP, d);
   const have = await stageList().catch(() => []);
@@ -394,7 +397,7 @@ function drawDepthAxis(id, e){
   }
   const mz = mohoDepth(VMODEL), my = Y(mz);
   if (my > 0 && my < h){
-    ctx.strokeStyle = "#ffd166"; ctx.fillStyle = "#ffd166";
+    ctx.strokeStyle = AX.accent || "#ffd166"; ctx.fillStyle = AX.accent || "#ffd166";
     ctx.beginPath(); ctx.moveTo(0, my + .5); ctx.lineTo(w, my + .5); ctx.stroke();
     ctx.fillText("Moho", 7, my - 6);
   }
