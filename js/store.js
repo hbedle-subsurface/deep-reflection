@@ -19,7 +19,9 @@
    promise. */
 
 const A2_DB = SITE.db;
-const A2_VERSION = 1;
+/* Version 2 so that the upgrade step runs on any database of this name left by
+   an earlier layout, and creates whichever stores it lacks. */
+const A2_VERSION = 2;
 
 /* The order the steps run in. `raw` is the line as read; `crop` is always
    written by the first step, even when the crop is the whole line. */

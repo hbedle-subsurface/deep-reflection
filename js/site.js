@@ -7,7 +7,9 @@ const SITE = {
         "takes out, compute attributes, classify them with a self-organizing map, and use SHAP values to see which " +
         "attributes the classes rest on. Everything is computed in this browser from the file itself.",
   // browser storage for this site; two sites under one host must not share it
-  db: "deep-reflection",
+  // a new name: the earlier Deep Reflection tool left a database called
+  // "deep-reflection" with a different layout in browsers that used it
+  db: "cold-case-legacy-seismic",
   // archived stacks often carry no amplitude recovery, so the workflow has an
   // amplitude step, applied with the measured exponent on the first visit
   gainStep: true,
