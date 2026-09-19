@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="../assets/glossary.css">
+<link rel="stylesheet" href="../css/style.css">
+<title>Migration</title>
+</head>
+<body>
+<div class="dash">
+  <aside class="side" id="side">
+    <h2>Migration<button class="help" data-help="mig">Learn more</button></h2>
+    <label class="toggle"><input type="checkbox" id="apply"> Apply this step</label>
+    <div class="guide"><p>On an unmigrated stack a dipping reflector is drawn shallower in dip and displaced
+    updip, and a point scatterer is drawn as a hyperbola. Migration moves the energy back toward where it came
+    from. This is a constant-velocity migration, so one velocity serves the whole record.</p></div>
+    <label>Migration velocity <b><span id="v-vel"></span> km/s</b></label>
+    <input type="range" id="vel" min="2" max="8" step="0.05" value="6">
+    <label>Velocity taken at <b><span id="v-tv"></span> s</b></label>
+    <input type="range" id="tv" min="0" max="20" step="0.25" value="8">
+    <div class="btnrow"><button id="btnModel">RMS velocity from the model</button></div>
+    <p class="hint" id="velInfo"></p>
+
+    <h2>Dip in degrees<button class="help" data-help="dipdeg">Learn more</button></h2>
+    <p class="hint">With "Drag to measure dip" chosen above the panels, a line dragged along a reflector on the
+    input or the migrated panel is measured. The slope in time is turned into a dip with the average velocity
+    of the model at that time.</p>
+    <div id="dips"></div>
+    <div class="btnrow"><button id="btnClearDips">Clear measurements</button></div>
+
+    <h2>Moved panel</h2>
+    <label>Gain on the moved panel <b><span id="v-remGain"></span>×</b></label>
+    <input type="range" id="remGain" min="1" max="20" step="0.5" value="1">
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="status"><span id="where"></span><span class="busy" id="busy" hidden></span></div>
+    <div class="panels" id="panels"></div>
+    <div class="note" id="note"></div>
+    <div id="next"></div>
+  </main>
+</div>
+
+<script src="../js/site.js"></script>
+<script src="../js/vmodel.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/dsp.js"></script>
+<script src="../js/deep.js"></script>
+<script src="../js/display.js"></script>
+<script src="../js/help.js"></script>
+<script src="../js/glossary.js"></script>
+<script src="../js/common.js"></script>
+<script src="../js/filterpage.js"></script>
+<script>
+let DIPS = [];
+
+function dxMeters(){
+  if (LINE.dist) return LINE.dist[LINE.dist.length - 1] / Math.max(1, LINE.nx - 1);
+  return LINE.dx || SITE.defaultDx;
+}
+
+filterPage({
+  stage: "mig", stepId: "mig",
+  controls: ["vel"],
+  delay: 500,
+  labels: {kept: "Migrated", removed: "Moved", keptNote: "after migration, same color scale as the input"},
+  defaults(input){
+    const tEnd = secAt(input.j0 + input.ns - 1);
+    $("tv").max = Math.floor(tEnd * 4) / 4;
+    $("tv").value = Math.min(+$("tv").max, Math.round(tEnd * 0.5 * 4) / 4);
+    if (VMODEL) $("vel").value = vRms(+$("tv").value, VMODEL).toFixed(2);
+  },
+  setParams(p){ $("vel").value = p.v; if (p.tv) $("tv").value = p.tv; },
+  readParams: () => ({v: +$("vel").value, tv: +$("tv").value, dx: dxMeters()}),
+  syncLabels(){
+    $("v-vel").textContent = (+$("vel").value).toFixed(2); $("v-tv").textContent = (+$("tv").value).toFixed(2);
+    $("velInfo").textContent = VMODEL ? "RMS velocity of the model at " + (+$("tv").value).toFixed(1) + " s: " +
+      vRms(+$("tv").value, VMODEL).toFixed(2) + " km/s. " + vmodelLabel(VMODEL) + "." : "";
+  },
+  apply: (input, p) => stoltMigrate(input.data, input.nx, input.ns, input.dt, p.dx, p.v * 1000),
+  after(){ drawDips(); },
+  note(fp){
+    if (!fp.on) return "<p>The step is skipped, so the next step works on " + STAGE_NAMES[fp.input.stage] + ".</p>";
+    return "<p>The moved panel is the input minus the migrated section: energy that migration took away from where it was " +
+      "drawn. Collapsed diffractions appear there as their hyperbolic tails, and dipping reflectors as the updip position they " +
+      "were moved from. Migration at " + (+$("vel").value).toFixed(2) + " km/s is exact for one velocity; events above the time " +
+      "the velocity was taken from are overmigrated, curving into smiles, and events below it are undermigrated.</p>";
+  }
+});
+
+/* Dip measurements: drawn on the class layer of the input and migrated panels,
+   which the filter pages do not otherwise use. */
+function drawDips(){
+  ["pIn", "pKept"].forEach(id => {
+    const cv = $(id + "-cls"); if (!cv) return;
+    const {ctx, w, h} = fitCanvas(cv);
+    DIPS.filter(m => m.panel === id).forEach((m, k) => {
+      const a = fracOf(id, m.a.i, m.a.j), b = fracOf(id, m.b.i, m.b.j);
+      ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(a.x * w, a.y * h); ctx.lineTo(b.x * w, b.y * h); ctx.stroke();
+      ctx.fillStyle = "#ffd166"; ctx.font = "600 12px Barlow, Arial, sans-serif";
+      ctx.fillText(isFinite(m.deg) ? m.deg.toFixed(0) + "°" : "–", b.x * w + 6, b.y * h);
+    });
+  });
+  $("dips").innerHTML = DIPS.length ? '<table class="data"><tr><th>Panel</th><th>At, s</th><th>Slope, ms/km</th><th>Dip</th></tr>' +
+    DIPS.map(m => "<tr><td>" + (m.panel === "pIn" ? "input" : "migrated") + "</td><td>" + m.t.toFixed(1) + "</td><td>" +
+      (m.p * 1000).toFixed(0) + "</td><td>" + (isFinite(m.deg) ? m.deg.toFixed(1) + "°" : "beyond 90°") + "</td></tr>").join("") + "</table>" +
+    '<p class="hint">Input: sin(dip) = v · slope / 2, the reflector as drawn on an unmigrated section. Migrated: tan(dip) = v · slope / 2. ' +
+    "v is the average velocity of the model to the middle of the line.</p>" : '<p class="hint">No measurements yet.</p>';
+}
+
+function measure(id, a, b){
+  if (!a || !b || a.i === b.i) return;
+  const sec = FP.input;
+  const x1 = kmAt(sec.i0 + a.i), x2 = kmAt(sec.i0 + b.i);
+  const t1 = secAt(sec.j0 + a.j), t2 = secAt(sec.j0 + b.j);
+  const p = (t2 - t1) / (x2 - x1);                          // s per km, two-way
+  const tm = (t1 + t2) / 2, v = VMODEL ? vAvg(tm, VMODEL) : +$("vel").value;
+  const migrated = id === "pKept" && FP.on;
+  DIPS.push({panel: id, a, b, t: tm, p, deg: dipFromSlope(p, v, migrated)});
+  drawDips();
+}
+
+(async function wire(){
+  // wait for the filter page to build its panels, then add the dip mode
+  while (!$("pIn") || !$("vbWhole")) await new Promise(r => setTimeout(r, 50));
+  $("stage").querySelector(".viewbar").remove();
+  viewBar($("stage"), "measure dip");
+  ["pIn", "pKept"].forEach(id => {
+    enableBox(id, (box, a, b) => measure(id, a, b));
+    PANEL_ACT[id].anyBox = true;
+  });
+})();
+
+$("btnModel").addEventListener("click", () => {
+  if (!VMODEL) return;
+  $("vel").value = vRms(+$("tv").value, VMODEL).toFixed(2);
+  $("vel").dispatchEvent(new Event("input"));
+});
+$("tv").addEventListener("input", () => FP && FP.cfg.syncLabels());
+$("btnClearDips").addEventListener("click", () => { DIPS = []; drawDips(); });
+</script>
+<script src="../assets/count.js"></script>
+</body>
+</html>

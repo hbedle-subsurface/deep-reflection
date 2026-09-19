@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="../assets/glossary.css">
+<link rel="stylesheet" href="../css/style.css">
+<title>Amplitude</title>
+</head>
+<body>
+<div class="dash">
+  <aside class="side" id="side">
+    <h2>Amplitude<button class="help" data-help="gain">Learn more</button></h2>
+    <label class="toggle"><input type="checkbox" id="apply"> Apply this step</label>
+    <div class="guide"><p>Reflection amplitude falls with two-way time through spherical spreading and
+    absorption. A time gain restores it so that deep reflections can be seen and measured next to shallow ones.</p></div>
+    <label>Gain<select id="mode"><option value="tpow">Time gain, t^n</option><option value="agc">AGC</option></select></label>
+    <div id="tpowBox">
+      <label>Exponent n <b><span id="v-n"></span></b></label>
+      <input type="range" id="tpow" min="0" max="4" step="0.1" value="2">
+    </div>
+    <div id="agcBox" hidden>
+      <label>AGC window <b><span id="v-agc"></span> ms</b></label>
+      <input type="range" id="agcWin" min="100" max="4000" step="50" value="1000">
+    </div>
+    <div class="btnrow"><button id="btnStart">Exponent from the measured decay</button></div>
+    <p class="hint" id="decayInfo"></p>
+
+    <h2>How the settings are usually chosen</h2>
+    <ol class="steps-list">
+      <li>The decay of RMS amplitude with time is measured on the input and fitted with a power of time.
+      A time gain with that exponent flattens the curve.</li>
+      <li>A time gain multiplies every trace by the same curve, so the amplitude of one trace relative to its
+      neighbors is unchanged. The amplitude attributes remain comparable along the line.</li>
+      <li>AGC divides each sample by the RMS amplitude around it. It brings up the deep record further, and it also
+      evens out real differences in reflection strength within the window, which the lateral check below measures.</li>
+      <li>Stacks from archives sometimes arrive with a gain already applied. A measured exponent near zero is the sign
+      of that, and the step can then be skipped.</li>
+    </ol>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="status"><span id="where"></span><span class="busy" id="busy" hidden></span></div>
+    <div class="panels" id="panels"></div>
+    <div class="figrow">
+      <div><h3>RMS amplitude down the record</h3>
+        <div class="plotbox"><canvas id="decay" style="height:260px"></canvas></div></div>
+      <div><h3>Checks</h3><div id="checks"></div></div>
+    </div>
+    <div class="note" id="note"></div>
+    <div id="next"></div>
+  </main>
+</div>
+
+<script src="../js/site.js"></script>
+<script src="../js/vmodel.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/dsp.js"></script>
+<script src="../js/measure.js"></script>
+<script src="../js/display.js"></script>
+<script src="../js/help.js"></script>
+<script src="../js/glossary.js"></script>
+<script src="../js/common.js"></script>
+<script>
+let INPUT = null, OUT = null, ON = false, DECAY_IN = null, DECAY_OUT = null;
+
+(async function init(){
+  await pageShell("gain");
+  if (!LINE){ emptyState($("stage"), "No line is open."); return; }
+  INPUT = sectionOf(await stageInput("gain"));
+  if (!INPUT){ emptyState($("stage"), "The crop has not been stored yet."); return; }
+  $("where").innerHTML = "Input: <b>" + STAGE_NAMES[INPUT.stage] + "</b>";
+  DECAY_IN = decayOf(INPUT);
+  const n = tpowOf(DECAY_IN);
+  $("decayInfo").textContent = DECAY_IN
+    ? "Measured on the input: RMS amplitude falls " + Math.abs(DECAY_IN.db).toFixed(0) + " dB from " + DECAY_IN.t0.toFixed(1) +
+      " to " + DECAY_IN.t1.toFixed(1) + " s, which a power of time fits with n = " + DECAY_IN.n.toFixed(2) + "."
+    : "Too little of the record carries amplitude to fit a decay.";
+  const stored = sectionOf(await stageLoad("gain"));
+  const skipped = await kvGet("skip:gain");
+  displayControls($("side"), drawAll);
+  makePanel($("panels"), "pIn", "Input", {height: 260});
+  makePanel($("panels"), "pOut", "Gained", {height: 260});
+  ["pIn", "pOut"].forEach(id => { attachReadout(id); linkPair(id); });
+  viewBar($("stage"));
+  onView(drawAll);
+  if (stored){
+    const p = stored.meta.params;
+    $("mode").value = p.mode; $("tpow").value = p.n; $("agcWin").value = p.agcMs;
+    OUT = stored.data; ON = true;
+  } else if (SITE.gainDefaultOn && !skipped && n !== null){
+    $("tpow").value = n; ON = true;
+    await run();
+  }
+  $("apply").checked = ON;
+  sync(); drawAll();
+  $("next").innerHTML = nextLink("gain");
+  glossaryScan(document.body);
+})();
+
+function params(){ return {mode: $("mode").value, n: +$("tpow").value, agcMs: +$("agcWin").value}; }
+function sync(){
+  $("v-n").textContent = (+$("tpow").value).toFixed(1); $("v-agc").textContent = $("agcWin").value;
+  $("tpowBox").hidden = $("mode").value !== "tpow"; $("agcBox").hidden = $("mode").value !== "agc";
+}
+
+/* t^n about the middle of the record, then one scalar so the output has the
+   RMS amplitude of the input; or AGC over the chosen window. */
+function applyGain(sec, p){
+  const {nx, ns} = sec, d = sec.data;
+  let out;
+  if (p.mode === "agc"){
+    out = agc(d, nx, ns, p.agcMs / 2 / (sec.dt / 1000));
+  } else {
+    const tref = secAt(sec.j0 + ns / 2);
+    const g = new Float32Array(ns);
+    for (let j = 0; j < ns; j++) g[j] = Math.pow(Math.max(secAt(sec.j0 + j), 0.01) / tref, p.n);
+    out = new Float32Array(d.length);
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ns; j++) out[i * ns + j] = d[i * ns + j] * g[j];
+  }
+  let a = 0, b = 0;
+  for (let k = 0; k < d.length; k++){ a += d[k] * d[k]; b += out[k] * out[k]; }
+  const s = b > 0 ? Math.sqrt(a / b) : 1;
+  for (let k = 0; k < out.length; k++) out[k] *= s;
+  return out;
+}
+
+async function run(){
+  if (!ON) return;
+  setBusy("Applying gain…"); await nextFrame();
+  const p = params();
+  OUT = applyGain(INPUT, p);
+  await stageSave("gain", {data: OUT, nx: INPUT.nx, ns: INPUT.ns, dt: INPUT.dt, j0: INPUT.j0},
+                  {i0: INPUT.i0, params: p, from: INPUT.stage});
+  await stageDropAfter("gain");
+  await kvDelete("skip:gain");
+  await kvDelete("band");
+  setBusy("");
+  drawAll();
+}
+
+/* RMS in windows down the record, in dB relative to the loudest window of the
+   input, on fixed axes. */
+function rmsRows(d, sec, rows){
+  const {nx, ns} = sec, n = Math.max(4, Math.floor(ns / rows)), step = Math.max(1, Math.ceil(nx / 200));
+  const t = [], v = [];
+  for (let r = 0; r < rows; r++){
+    const j0 = Math.round(r * (ns - n) / Math.max(1, rows - 1));
+    let acc = 0, c = 0;
+    for (let i = 0; i < nx; i += step) for (let j = j0; j < j0 + n; j++){ acc += d[i * ns + j] ** 2; c++; }
+    t.push(secAt(sec.j0 + j0 + n / 2)); v.push(Math.sqrt(acc / Math.max(1, c)));
+  }
+  return {t, v};
+}
+/* How well each trace keeps its amplitude relative to its neighbors: the
+   correlation, window by window, between the per-trace RMS of input and output. */
+function lateralKeep(a, b, sec){
+  const {nx, ns} = sec, rows = 20, n = Math.floor(ns / rows);
+  let sum = 0, cnt = 0;
+  for (let r = 0; r < rows; r++){
+    const j0 = r * n, xa = [], xb = [];
+    for (let i = 0; i < nx; i++){
+      let p = 0, q = 0;
+      for (let j = j0; j < j0 + n; j++){ p += a[i * ns + j] ** 2; q += b[i * ns + j] ** 2; }
+      xa.push(Math.sqrt(p)); xb.push(Math.sqrt(q));
+    }
+    const ma = xa.reduce((s, x) => s + x, 0) / nx, mb = xb.reduce((s, x) => s + x, 0) / nx;
+    let sab = 0, saa = 0, sbb = 0;
+    for (let i = 0; i < nx; i++){ sab += (xa[i] - ma) * (xb[i] - mb); saa += (xa[i] - ma) ** 2; sbb += (xb[i] - mb) ** 2; }
+    if (saa > 0 && sbb > 0){ sum += sab / Math.sqrt(saa * sbb); cnt++; }
+  }
+  return cnt ? sum / cnt : 1;
+}
+
+function drawAll(){
+  if (!INPUT) return;
+  const out = ON && OUT ? OUT : INPUT.data;
+  drawSeis("pIn", INPUT, INPUT.data, undefined, STAGE_NAMES[INPUT.stage] + ", its own color scale");
+  drawSeis("pOut", INPUT, out, undefined, ON ? "after the gain, its own color scale" : "step skipped: the input passes through unchanged");
+  const a = rmsRows(INPUT.data, INPUT, 40), b = rmsRows(out, INPUT, 40);
+  const ref = Math.max(...a.v);
+  const db = v => v.map(x => Math.max(-80, 20 * Math.log10((x || 1e-20) / ref)));
+  const P = plotFrame($("decay"), [secAt(INPUT.j0), secAt(INPUT.j0 + INPUT.ns - 1)], [-60, 10], "two-way time (s)", "RMS amplitude (dB)");
+  if (P){
+    plotLine(P, a.t, db(a.v), "#16191C", 1.8);
+    if (ON) plotLine(P, b.t, db(b.v), "#841617", 1.8);
+    const c = P.ctx; c.font = "10px Barlow, Arial, sans-serif"; c.textBaseline = "top"; c.textAlign = "left";
+    c.fillStyle = "#16191C"; c.fillText("input", P.w - P.R - 80, P.T + 6);
+    if (ON){ c.fillStyle = "#841617"; c.fillText("gained", P.w - P.R - 80, P.T + 20); }
+  }
+  if (!ON){ $("checks").innerHTML = '<p class="hint" style="color:var(--chalk-dim)">The checks appear once the step is applied.</p>';
+    $("note").innerHTML = "<p>The step is skipped, so the next step works on " + STAGE_NAMES[INPUT.stage] + ".</p>"; return; }
+  DECAY_OUT = decayOf({data: out, nx: INPUT.nx, ns: INPUT.ns, dt: INPUT.dt, j0: INPUT.j0});
+  const keep = lateralKeep(INPUT.data, out, INPUT);
+  $("checks").innerHTML = renderChecks([
+    {name: "Decay left after the gain, as a power of time", before: DECAY_IN ? fmt(DECAY_IN.n, 2) : "–", now: DECAY_OUT ? fmt(DECAY_OUT.n, 2) : "–",
+     meaning: "Near zero once the gain matches the decay. Negative means the deep record is now brighter than the shallow.",
+     flag: DECAY_OUT && Math.abs(DECAY_OUT.n) > 0.5 ? "More than 0.5 from zero: the gain and the decay do not match." : ""},
+    {name: "Lateral amplitude relations kept", before: "1.00", now: fmt(keep, 2),
+     meaning: "Correlation, window by window, between each trace's RMS amplitude before and after. A time gain keeps it at 1.",
+     flag: keep < 0.9 ? "Below 0.9: the gain has changed how bright traces are relative to their neighbors." : ""}
+  ]);
+  $("note").innerHTML = "<p>" + ($("mode").value === "tpow"
+    ? "Each sample is multiplied by (t / " + fmt(secAt(INPUT.j0 + INPUT.ns / 2), 2) + " s) raised to " + fmt(+$("tpow").value, 1) + ", the same curve on every trace."
+    : "Each sample is divided by the RMS amplitude in a " + $("agcWin").value + " ms window around it.") +
+    " The output is then scaled by one number to the RMS amplitude of the input. The input and gained panels each use their own color scale, since the gain changes the range.</p>";
+}
+
+/* A plain renderChecks, as on the filter pages. */
+function renderChecks(rows){
+  return '<table class="data checks-table"><tr><th>Check</th><th>Input</th><th>Now</th><th>What it measures</th></tr>' +
+    rows.map(r => "<tr" + (r.flag ? ' class="flag"' : "") + "><th>" + r.name + "</th><td>" + r.before + "</td><td>" + r.now +
+      "</td><td>" + r.meaning + (r.flag ? " <b>" + r.flag + "</b>" : "") + "</td></tr>").join("") + "</table>";
+}
+
+function linkPair(id){
+  const fr = $(id + "-frame");
+  fr.addEventListener("mousemove", ev => {
+    const r = fr.getBoundingClientRect(), u = (ev.clientX - r.left) / r.width, v = (ev.clientY - r.top) / r.height;
+    ["pIn", "pOut"].forEach(k => { const {ctx, w, h} = fitCanvas($(k + "-ovl")); ctx.strokeStyle = "rgba(255,209,102,0.9)";
+      ctx.beginPath(); ctx.moveTo(u * w, 0); ctx.lineTo(u * w, h); ctx.moveTo(0, v * h); ctx.lineTo(w, v * h); ctx.stroke(); });
+  });
+  fr.addEventListener("mouseleave", () => ["pIn", "pOut"].forEach(k => fitCanvas($(k + "-ovl"))));
+}
+
+const rerun = debounce(run, 350);
+["tpow", "agcWin", "mode"].forEach(k => $(k).addEventListener("input", () => { sync(); rerun(); }));
+$("btnStart").addEventListener("click", () => {
+  const n = tpowOf(DECAY_IN); if (n === null) return;
+  $("mode").value = "tpow"; $("tpow").value = n; sync();
+  if (!ON){ ON = true; $("apply").checked = true; }
+  run();
+});
+$("apply").addEventListener("change", async () => {
+  ON = $("apply").checked;
+  if (ON){ await run(); return; }
+  await stageDrop("gain"); await stageDropAfter("gain"); await kvSet("skip:gain", true); await kvDelete("band");
+  drawAll();
+});
+window.addEventListener("resize", debounce(drawAll, 200));
+</script>
+<script src="../assets/count.js"></script>
+</body>
+</html>

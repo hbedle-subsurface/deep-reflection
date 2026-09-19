@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="assets/glossary.css">
+<link rel="stylesheet" href="css/style.css">
+<title>Seismic line analysis</title>
+<meta name="description" content="Load a 2D seismic line, condition it, compute attributes, classify them with a self-organizing map and read the result with SHAP, all in the browser. University of Oklahoma / AASPI.">
+</head>
+<body>
+
+<div class="landing">
+  <p class="lede" id="lede"></p>
+
+  <div class="open">
+    <div class="card">
+      <h2>Open a 2D SEG-Y file</h2>
+      <div class="drop" id="drop">
+        <p>Post-stack, one line. Drag the file here or choose it.</p>
+        <p><input type="file" id="fileInput" accept=".sgy,.segy,.SGY,.SEGY"></p>
+      </div>
+      <p class="busy" id="busy" hidden></p>
+      <p class="hint" id="loadErr" hidden></p>
+    </div>
+    <div id="samples" style="display:grid;gap:18px"></div>
+  </div>
+
+  <div class="steps" id="steps"></div>
+
+  <p class="lede" style="margin-top:26px">Each step writes its result to storage in this browser,
+  and the next step starts from it. The filter steps can be skipped: a skipped step passes the line
+  through unchanged. Opening a new line clears everything computed from the previous one.</p>
+</div>
+
+<script src="js/site.js"></script>
+<script src="js/vmodel.js"></script>
+<script src="js/store.js"></script>
+<script src="js/segy.js"></script>
+<script src="js/display.js"></script>
+<script src="js/help.js"></script>
+<script src="js/glossary.js"></script>
+<script src="js/common.js"></script>
+<script>
+(async function init(){
+  await pageShell("index");
+  $("lede").textContent = SITE.lede;
+  $("samples").innerHTML = SITE.samples.map((x, k) =>
+    '<div class="card"><h2>Sample line: ' + x.short + '</h2><p>' + x.blurb + '</p>' +
+    (x.hint ? '<p class="hint">' + x.hint + '</p>' : '') +
+    '<div class="btnrow"><button class="primary" data-sample="' + k + '">Open ' + x.short + ' (' + x.mb + ' MB)</button></div></div>').join("");
+  $("steps").innerHTML = "<h4>The steps</h4>" + STEPS.map(s =>
+    '<a href="pages/' + s.file + '"><span class="n">' + s.n + "</span><h3>" + s.title +
+    "</h3><p>" + s.blurb + "</p></a>").join("");
+  glossaryScan(document.querySelector(".landing"));
+})();
+
+async function openBuffer(ab, name, dx, sampleId){
+  $("loadErr").hidden = true;
+  setBusy("Reading " + name + "…");
+  await nextFrame();
+  let S;
+  try { S = parseSegy(ab); }
+  catch (e){
+    setBusy("");
+    $("loadErr").hidden = false;
+    $("loadErr").textContent = "That file did not open: " + e.message;
+    return;
+  }
+  setBusy("Storing the line…");
+  await a2ClearAll();
+  const line = {
+    name, sampleId: sampleId || null, nx: S.nx, ns: S.ns, dt: S.dt, delayMs: S.delayMs || 0,
+    dx: S.dist ? null : (dx || null), dist: S.dist ? Array.from(S.dist) : null,
+    step: S.step, ntrFile: S.ntrFile, fmt: S.fmt,
+    textual: S.textual, binary: S.binary, traceRows: S.traceRows,
+    cdp0: S.cdp[0], cdp1: S.cdp[S.nx - 1], opened: Date.now()
+  };
+  await kvSet("line", line);
+  const sec = {data: S.data, nx: S.nx, ns: S.ns, dt: S.dt, j0: 0};
+  await stageSave("raw", sec, {i0: 0});
+  await stageSave("crop", sec, {i0: 0, whole: true});
+  await kvSet("crop", {i0: 0, i1: S.nx - 1, j0: 0, j1: S.ns - 1});
+  location.href = "pages/line.html";
+}
+
+$("fileInput").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  f.arrayBuffer().then(ab => openBuffer(ab, f.name, null));
+});
+const drop = $("drop");
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => {
+  e.preventDefault(); drop.classList.remove("over");
+  const f = e.dataTransfer.files[0];
+  if (f) f.arrayBuffer().then(ab => openBuffer(ab, f.name, null));
+});
+$("samples").addEventListener("click", async e => {
+  const b = e.target.closest("[data-sample]"); if (!b) return;
+  const x = SITE.samples[+b.dataset.sample];
+  setBusy("Downloading " + x.short + "…");
+  try {
+    const r = await fetch(x.file);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    openBuffer(await r.arrayBuffer(), x.name, x.dx, x.id);
+  } catch (err){
+    setBusy("");
+    $("loadErr").hidden = false;
+    $("loadErr").textContent = "The sample could not be downloaded (" + err.message +
+      "). Opened from disk, browsers block this request; the site has to be served, for example with python -m http.server.";
+  }
+});
+</script>
+<script src="assets/count.js"></script>
+</body>
+</html>

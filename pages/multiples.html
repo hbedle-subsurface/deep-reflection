@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="../assets/glossary.css">
+<link rel="stylesheet" href="../css/style.css">
+<title>Multiples</title>
+</head>
+<body>
+<div class="dash">
+  <aside class="side" id="side">
+    <h2>Multiples<button class="help" data-help="multiples">Learn more</button></h2>
+    <div class="guide"><p>A strong shallow reflector sends energy back down from the surface, and it reflects
+    again. Clicking a reflector follows it along the line and draws where its multiples would arrive; a deep event that
+    runs along one of those curves may be a multiple rather than a reflection from the deep crust.</p></div>
+    <div class="keybtns" role="group" aria-label="Pick">
+      <button id="pickA" aria-pressed="true">Click picks A</button><button id="pickB" aria-pressed="false">Click picks B</button></div>
+    <p class="hint" id="pickInfo">No reflector picked yet.</p>
+    <div class="btnrow"><button id="btnClear">Clear the picks</button></div>
+
+    <h2>Predicted arrivals</h2>
+    <label class="toggle"><input type="checkbox" id="sA" checked> Surface multiples of A: 2A, 3A</label>
+    <label class="toggle"><input type="checkbox" id="sB" checked> Surface multiple of B: 2B</label>
+    <label class="toggle"><input type="checkbox" id="pAB" checked> Peg-leg, surface and A then B: A + B</label>
+    <label class="toggle"><input type="checkbox" id="iAB" checked> Interbed, between A and B: 2B − A</label>
+
+    <h2>Periodicity</h2>
+    <div class="row2">
+      <label>Window top, s<input type="number" id="w0" step="0.5"></label>
+      <label>Window base, s<input type="number" id="w1" step="0.5"></label>
+    </div>
+    <label>Longest lag <b><span id="v-lag"></span> s</b></label>
+    <input type="range" id="lag" min="0.5" max="8" step="0.25" value="4">
+    <p class="hint">Each trace is autocorrelated over the window. A multiple repeats the reflector above it at a fixed
+    delay, so the autocorrelation peaks at that delay on every trace where the multiple is present.</p>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="status"><span id="where"></span><span class="busy" id="busy" hidden></span></div>
+    <div class="panels" id="panels"></div>
+    <div class="figrow">
+      <div><h3>Autocorrelation of each trace</h3><div class="plotbox"><canvas id="ac" style="height:280px"></canvas></div></div>
+      <div><h3>Average autocorrelation</h3><div class="plotbox"><canvas id="acm" style="height:280px"></canvas></div></div>
+    </div>
+    <div class="figrow"><div><h3>Along each predicted curve</h3><div id="checks"></div></div><div class="note" id="note"></div></div>
+    <div id="next"></div>
+  </main>
+</div>
+
+<script src="../js/site.js"></script>
+<script src="../js/vmodel.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/dsp.js"></script>
+<script src="../js/deep.js"></script>
+<script src="../js/display.js"></script>
+<script src="../js/attributes.js"></script>
+<script src="../js/help.js"></script>
+<script src="../js/glossary.js"></script>
+<script src="../js/common.js"></script>
+<script>
+let SEC = null, DIP = null, ENV = null, PICK = "A", H = {A: null, B: null}, AC = null;
+const COL = {A: "#ffd166", B: "#7fd1ff", "2A": "#ff7b54", "3A": "#ff7b54", "2B": "#c792ea", "A+B": "#9be564", "2B-A": "#ff5c8a"};
+
+(async function init(){
+  await pageShell("multiples");
+  if (!LINE){ emptyState($("stage"), "No line is open."); return; }
+  SEC = sectionOf(await stageInput(null));
+  if (!SEC){ emptyState($("stage"), "The crop has not been stored yet."); return; }
+  $("where").innerHTML = "Picked on <b>" + STAGE_NAMES[SEC.stage] + "</b>";
+  displayControls($("side"), drawAll);
+  makePanel($("panels"), "sec", "Section with predicted multiples", {height: 420});
+  attachReadout("sec");
+  viewBar($("stage"));
+  $("vbText").textContent = "Click a reflector to pick it; drag a box to zoom.";
+  onView(drawAll);
+  onPanelClick("sec", s => pick(s));
+  setBusy("Measuring dips…"); await nextFrame();
+  DIP = computeTensor(SEC.data, SEC.nx, SEC.ns, 3).dip;
+  ENV = attrCache(SEC.data, SEC.nx, SEC.ns, SEC.dt, null).env;
+  setBusy("");
+  const saved = await kvGet("multiplePicks");
+  if (saved && saved.ts === SEC.ts){ H.A = saved.A ? Float32Array.from(saved.A) : null; H.B = saved.B ? Float32Array.from(saved.B) : null; }
+  const t0 = secAt(SEC.j0), t1 = secAt(SEC.j0 + SEC.ns - 1);
+  $("w0").value = (t0 + (t1 - t0) / 2).toFixed(1); $("w1").value = t1.toFixed(1);
+  $("lag").max = Math.max(1, Math.floor((t1 - t0) / 2 * 4) / 4);
+  $("lag").value = Math.min(+$("lag").max, 4);
+  autocorr(); drawAll();
+  $("next").innerHTML = nextLink("multiples");
+  glossaryScan(document.querySelector("aside"));
+})();
+
+function meanT(h){ let s = 0, n = 0; for (const j of h) if (isFinite(j)){ s += j; n++; } return n ? secAt(SEC.j0 + s / n) : NaN; }
+
+async function pick(s){
+  if (!DIP) return;
+  setBusy("Following the reflector…"); await nextFrame();
+  H[PICK] = trackHorizon(SEC.data, SEC.nx, SEC.ns, DIP, s.i, s.j, Math.max(2, Math.round(8000 / SEC.dt)));
+  await kvSet("multiplePicks", {ts: SEC.ts, A: H.A ? Array.from(H.A) : null, B: H.B ? Array.from(H.B) : null});
+  setBusy("");
+  if (PICK === "A" && !H.B) setPick("B");
+  drawAll();
+}
+
+/* The predicted curves, as sample indices per trace. Times are two-way from
+   the surface, so a first-order surface multiple of a reflector at t arrives
+   at 2t: the sample index is doubled after adding the index of time zero. */
+function curves(){
+  const out = [];
+  const z = Math.round(-secAt(SEC.j0) / (SEC.dt * 1e-6));   // index of t = 0
+  const T = h => i => z > -1e9 && isFinite(h[i]) ? h[i] - z : NaN;   // index measured from t = 0
+  const mk = (name, f) => { const c = new Float32Array(SEC.nx); for (let i = 0; i < SEC.nx; i++) c[i] = f(i); out.push({name, c}); };
+  if (H.A){ const a = T(H.A);
+    if ($("sA").checked){ mk("2A", i => 2 * a(i) + z); mk("3A", i => 3 * a(i) + z); } }
+  if (H.B){ const b = T(H.B);
+    if ($("sB").checked) mk("2B", i => 2 * b(i) + z); }
+  if (H.A && H.B){ const a = T(H.A), b = T(H.B);
+    if ($("pAB").checked) mk("A+B", i => a(i) + b(i) + z);
+    if ($("iAB").checked) mk("2B-A", i => 2 * b(i) - a(i) + z); }
+  return out.map(o => { for (let i = 0; i < SEC.nx; i++) if (o.c[i] < 0 || o.c[i] > SEC.ns - 1) o.c[i] = NaN; return o; });
+}
+
+function drawAll(){
+  if (!SEC) return;
+  drawSeis("sec", SEC, SEC.data);
+  const cv = $("sec-cls"), {ctx, w, h} = fitCanvas(cv);
+  const line = (arr, color, dash, label) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash);
+    ctx.beginPath(); let on = false, lx = 0, ly = 0;
+    for (let i = 0; i < SEC.nx; i++){
+      if (!isFinite(arr[i])){ on = false; continue; }
+      const f = fracOf("sec", i, arr[i]), x = f.x * w, y = f.y * h;
+      if (x < -5 || x > w + 5) { on = false; continue; }
+      on ? ctx.lineTo(x, y) : ctx.moveTo(x, y); on = true; lx = x; ly = y;
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    if (label && lx){ ctx.fillStyle = color; ctx.font = "700 12px Barlow, Arial, sans-serif"; ctx.fillText(label, Math.min(lx + 4, w - 40), ly - 4); }
+  };
+  if (H.A) line(H.A, COL.A, [], "A");
+  if (H.B) line(H.B, COL.B, [], "B");
+  const C = curves();
+  C.forEach(o => line(o.c, COL[o.name], [7, 5], o.name));
+  $("pickInfo").innerHTML = (H.A ? "A at " + meanT(H.A).toFixed(2) + " s on average" : "A not picked") + "<br>" +
+    (H.B ? "B at " + meanT(H.B).toFixed(2) + " s on average" : "B not picked");
+  checks(C);
+  drawAC();
+}
+
+/* Envelope along each predicted curve against the envelope 60 ms above and
+   below it. A ratio well above 1 means there is an event running along the
+   curve; near 1, nothing follows it. */
+function checks(C){
+  if (!C.length){ $("checks").innerHTML = '<p class="hint" style="color:var(--chalk-dim)">Pick a reflector to predict its multiples.</p>'; $("note").innerHTML = ""; return; }
+  const off = Math.max(3, Math.round(60000 / SEC.dt));
+  const rows = C.map(o => {
+    let on = 0, side = 0, n = 0;
+    for (let i = 0; i < SEC.nx; i++){
+      const j = Math.round(o.c[i]); if (!isFinite(o.c[i]) || j - off < 0 || j + off >= SEC.ns) continue;
+      let m = 0; for (let d = -1; d <= 1; d++) m = Math.max(m, ENV[i * SEC.ns + j + d]);
+      on += m; side += 0.5 * (ENV[i * SEC.ns + j - off] + ENV[i * SEC.ns + j + off]); n++;
+    }
+    const r = side > 0 ? on / side : NaN;
+    return "<tr" + (r > 1.5 ? ' class="flag"' : "") + "><th>" + o.name + "</th><td>" + (n ? (100 * n / SEC.nx).toFixed(0) + "%" : "–") +
+      "</td><td>" + (isFinite(r) ? r.toFixed(2) : "–") + "</td><td>" + (r > 1.5 ? "An event runs along this curve." : "Little follows this curve.") + "</td></tr>";
+  });
+  $("checks").innerHTML = '<table class="data checks-table"><tr><th>Curve</th><th>Traces inside the record</th><th>Envelope on the curve / 60 ms off it</th><th>Reading</th></tr>' + rows.join("") + "</table>";
+  $("note").innerHTML = "<p>A ratio above 1.5 means the envelope is higher on the curve than beside it, so some event runs along the predicted path. " +
+    "That event can be a multiple, or a primary reflection that happens to share the geometry; a primary that crosses the curve at an " +
+    "angle, or continues where the curve stops, is not explained by it.</p>";
+}
+
+function autocorr(){
+  if (!SEC) return;
+  const toJ = t => Math.max(0, Math.min(SEC.ns - 1, Math.round((t - secAt(SEC.j0)) / (SEC.dt * 1e-6))));
+  const j0 = toJ(+$("w0").value), j1 = toJ(+$("w1").value);
+  const L = Math.max(4, Math.min(j1 - j0 - 1, Math.round(+$("lag").value / (SEC.dt * 1e-6))));
+  if (j1 - j0 < 32){ AC = null; return; }
+  AC = {data: traceAutocorr(SEC.data, SEC.nx, SEC.ns, j0, j1, L), L};
+  $("v-lag").textContent = (+$("lag").value).toFixed(2);
+}
+
+function drawAC(){
+  if (!AC) return;
+  const lagMax = (AC.L) * SEC.dt * 1e-6, x0 = kmAt(SEC.i0), x1 = kmAt(SEC.i0 + SEC.nx - 1);
+  const P = plotFrame($("ac"), [x0, x1], [lagMax, 0], "distance along the line (km)", "lag (s)");
+  if (P){
+    const W = Math.max(1, Math.round(P.w - P.L - P.R)), Hh = Math.max(1, Math.round(P.h - P.T - P.B));
+    const img = P.ctx.createImageData(W, Hh), lut = buildLUT("bwr");
+    for (let y = 0; y < Hh; y++){
+      const l = Math.min(AC.L, Math.round(y / Hh * AC.L));
+      for (let x = 0; x < W; x++){
+        const i = Math.min(SEC.nx - 1, Math.round(x / W * (SEC.nx - 1)));
+        const v = AC.data[i * (AC.L + 1) + l], q = Math.max(0, Math.min(511, Math.round((v * 2 + 1) / 2 * 511))), o = (y * W + x) * 4;
+        img.data[o] = lut[q * 3]; img.data[o + 1] = lut[q * 3 + 1]; img.data[o + 2] = lut[q * 3 + 2]; img.data[o + 3] = 255;
+      }
+    }
+    const tmp = document.createElement("canvas"); tmp.width = W; tmp.height = Hh; tmp.getContext("2d").putImageData(img, 0, 0);
+    P.ctx.drawImage(tmp, P.L, P.T, W, Hh);
+  }
+  const mean = new Float32Array(AC.L + 1);
+  for (let i = 0; i < SEC.nx; i++) for (let l = 0; l <= AC.L; l++) mean[l] += AC.data[i * (AC.L + 1) + l] / SEC.nx;
+  const lags = Array.from(mean, (_, l) => l * SEC.dt * 1e-6);
+  const Q = plotFrame($("acm"), [0, lagMax], [-0.5, 1], "lag (s)", "average autocorrelation");
+  if (!Q) return;
+  plotLine(Q, lags, Array.from(mean), "#16191C", 1.6);
+  const mark = (t, color, label) => { if (!(t > 0 && t < lagMax)) return;
+    Q.ctx.strokeStyle = color; Q.ctx.setLineDash([4, 3]); Q.ctx.beginPath(); Q.ctx.moveTo(Q.X(t), Q.T); Q.ctx.lineTo(Q.X(t), Q.h - Q.B); Q.ctx.stroke(); Q.ctx.setLineDash([]);
+    Q.ctx.fillStyle = color; Q.ctx.font = "11px Barlow, Arial, sans-serif"; Q.ctx.fillText(label, Q.X(t) + 3, Q.T + 12); };
+  const tA = H.A ? meanT(H.A) : NaN, tB = H.B ? meanT(H.B) : NaN;
+  mark(tA, "#b8860b", "A");
+  mark(tB, "#1f7ab8", "B");
+  mark(tB - tA, "#c2185b", "B − A");
+}
+
+function setPick(k){ PICK = k; $("pickA").setAttribute("aria-pressed", String(k === "A")); $("pickB").setAttribute("aria-pressed", String(k === "B")); }
+$("pickA").addEventListener("click", () => setPick("A"));
+$("pickB").addEventListener("click", () => setPick("B"));
+$("btnClear").addEventListener("click", async () => { H = {A: null, B: null}; setPick("A"); await kvDelete("multiplePicks"); drawAll(); });
+["sA", "sB", "pAB", "iAB"].forEach(k => $(k).addEventListener("change", drawAll));
+["w0", "w1"].forEach(k => $(k).addEventListener("change", () => { autocorr(); drawAC(); }));
+$("lag").addEventListener("input", debounce(() => { autocorr(); drawAC(); }, 200));
+window.addEventListener("resize", debounce(drawAll, 200));
+</script>
+<script src="../assets/count.js"></script>
+</body>
+</html>
