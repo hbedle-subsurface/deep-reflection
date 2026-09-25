@@ -6,9 +6,11 @@
 
 The deep reflection profiles shot in the 1970s and 80s, COCORP in the US and its
 cousins elsewhere, are still some of the best images we have of the crust below
-the basins. Most of them sit in archives as stacked SEG-Y files, and most of the
-people who could use them, in tectonics, geochemistry, or a thesis on a mountain
-range, don't run seismic attributes and don't have the software to start.
+the basins. The same goes for the 2D marine lines shot for scientific drilling
+site surveys and seafloor mapping. Most of them sit in archives as stacked SEG-Y
+files, and most of the people who could use them, in tectonics, geochemistry,
+marine geology, or a thesis on a mountain range, don't run seismic attributes
+and don't have the software to start.
 
 So this is a way in. Drop a legacy 2D line into a browser and work through it:
 bring the amplitude back up, see what the band actually is, filter out what
@@ -35,14 +37,14 @@ attributes did the work.
 
 ## What's in it
 
-1. **Open the line**: headers, trace spacing, crop, and a depth scale from a 1D velocity model (AK135 or PREM, with an optional sediment layer, editable)
+1. **Open the line**: headers, trace positions from whichever header fields hold them (CDP, source or receiver coordinates, in meters, feet, seconds of arc or degrees), a location map, the seafloor and a water-column mute on marine lines, the crop, and a depth scale from a 1D velocity model (AK135, PREM or oceanic crust, with optional water and sediment layers, editable)
 2. **Amplitude**: the measured decay down the record, and a time gain to restore it
 3. **Bandwidth**: the spectrum, and how the band changes down the record
 4. **f-k filter**: dip and frequency rejection
 5. **Migration**: constant-velocity Stolt migration, and a tool that turns a dragged slope into a dip in degrees
 6. **Structure-oriented smoothing**: smoothing along reflectors, with faults protected
 7. **Spectral balancing**: time-variant balancing and whitening
-8. **Multiples**: pick a shallow reflector and see where its surface, peg-leg and interbed multiples would arrive, plus trace autocorrelations to look for periodicity
+8. **Multiples**: pick a shallow reflector, or take the seafloor, and see where its surface, peg-leg and interbed multiples would arrive, plus trace autocorrelations to look for periodicity
 9. **Reflectivity**: reflection density, lamella lengths and dips, and correlation lengths, compared between two zones such as upper and lower crust
 10. **Attributes**: twenty-two of them, with a correlation matrix and a striping check
 11. **Self-organizing map**: pick the attributes and map size, train, run the null test
@@ -51,8 +53,29 @@ attributes did the work.
 
 Every panel carries two-way time down the left and model depth down the right,
 with the model Moho marked, and the display can be set to a fixed vertical
-exaggeration, including true scale. The amplitude step starts on, with the
-exponent measured from the line; the filters and migration start off.
+exaggeration, including true scale. On a marine line the depth scale hangs from
+the picked seafloor. The amplitude step starts on, with the exponent measured
+from the line; the filters and migration start off.
+
+Long lines are shown thinned to fit in browser memory, and the crop is read again
+from the file with every trace that fits.
+
+## Knowing what has been done
+
+Every page carries a record of the line: each step that changes the data, its
+settings, and where each setting came from (measured from this line, taken from
+the velocity model, the tool's starting value, or set by hand). A filter step
+whose checks pass their limits is marked in the workflow strip, and the
+attributes step lists anything earlier that affects what the attributes will
+measure, with a link back to the step.
+
+## Saving results
+
+Every section panel has two buttons. **PNG** saves the panel as it is on the
+screen, with its axes and color bar. **SEG-Y** saves the whole section behind
+it, with the CDP numbers and coordinates of the original file and a textual
+header that records the steps applied. The seafloor and the reflectors picked
+on the multiples step save as CSV tables with time and model depth.
 
 ## Sample lines
 

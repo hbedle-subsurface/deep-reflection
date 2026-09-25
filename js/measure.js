@@ -40,9 +40,13 @@ function spectrumOf(seg, winMs){
    in log time against log amplitude. The slope is the exponent n in t^-n, which
    is what a t^n gain has to undo. Returns null where the fit has too few live
    windows to mean anything. */
-function decayOf(seg){
+function decayOf(seg, live){
   if (!seg || !seg.data) return null;
   const {nx, ns, dt} = seg, j00 = seg.j0 || 0;
+  // live: first live sample per trace under a water-column mute; samples above
+  // it are left out of the RMS, so a seafloor that deepens along the line does
+  // not show up as amplitude decay
+  const L = live || null;
   const rows = 40, n = Math.max(8, Math.floor(ns/rows));
   const stepX = Math.max(1, Math.ceil(nx/200));
   const T = [], Y = [];
@@ -50,9 +54,9 @@ function decayOf(seg){
   for (let r=0;r<rows;r++){
     const j0 = Math.round(r*(ns-n)/Math.max(1, rows-1));
     let acc = 0, c = 0;
-    for (let i=0;i<nx;i+=stepX) for (let j=j0;j<j0+n;j++){
+    for (let i=0;i<nx;i+=stepX) for (let j=Math.max(j0, L ? L[i] : 0);j<j0+n;j++){
       const v = seg.data[i*ns+j]; acc += v*v; c++; }
-    const rms = Math.sqrt(acc/Math.max(1,c));
+    const rms = c ? Math.sqrt(acc/c) : 0;
     const t = (j00 + j0 + n/2) * dt * 1e-6;
     if (t > 0.1 && rms > 0){ T.push(t); Y.push(rms); if (rms > ymax) ymax = rms; }
   }

@@ -39,7 +39,7 @@ function drawClasses(id, sec, run, alpha, hidden, opt){
   const g = tmp.getContext("2d"), img = g.createImageData(run.gnx, run.gnt);
   for (let i = 0; i < run.gnx; i++) for (let j = 0; j < run.gnt; j++){
     const k = run.bmu[i * run.gnt + j], o = (j * run.gnx + i) * 4;
-    if (hidden && hidden.has(k)) continue;
+    if (k === 255 || (hidden && hidden.has(k))) continue;   // 255: muted water column
     img.data[o] = cols[k][0]; img.data[o+1] = cols[k][1]; img.data[o+2] = cols[k][2]; img.data[o+3] = 255;
   }
   g.putImageData(img, 0, 0);

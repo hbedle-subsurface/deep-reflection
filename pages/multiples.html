@@ -44,7 +44,8 @@
     <div class="keybtns" role="group" aria-label="Pick">
       <button id="pickA" aria-pressed="true">Click picks A</button><button id="pickB" aria-pressed="false">Click picks B</button></div>
     <p class="hint" id="pickInfo">No reflector picked yet.</p>
-    <div class="btnrow"><button id="btnClear">Clear the picks</button></div>
+    <div class="btnrow"><button id="btnSf" hidden>Use the seafloor as A</button><button id="btnClear">Clear the picks</button>
+      <button id="btnCsv">Save the picks as CSV</button></div>
 
     <h2>Predicted arrivals</h2>
     <label class="toggle"><input type="checkbox" id="sA" checked> Surface multiples of A: 2A, 3A</label>
@@ -78,6 +79,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/deep.js"></script>
 <script src="../js/display.js"></script>
@@ -112,6 +114,7 @@ const COL = {A: "#ffd166", B: "#7fd1ff", "2A": "#ff7b54", "3A": "#ff7b54", "2B":
   $("w0").value = (t0 + (t1 - t0) / 2).toFixed(1); $("w1").value = t1.toFixed(1);
   $("lag").max = Math.max(1, Math.floor((t1 - t0) / 2 * 4) / 4);
   $("lag").value = Math.min(+$("lag").max, 4);
+  if (SEAFLOOR) $("btnSf").hidden = false;
   autocorr(); drawAll();
   $("next").innerHTML = nextLink("multiples");
   glossaryScan(document.querySelector("aside"));
@@ -208,7 +211,7 @@ function autocorr(){
 
 function drawAC(){
   if (!AC) return;
-  const lagMax = (AC.L) * SEC.dt * 1e-6, x0 = kmAt(SEC.i0), x1 = kmAt(SEC.i0 + SEC.nx - 1);
+  const lagMax = (AC.L) * SEC.dt * 1e-6, x0 = secKm(SEC, 0), x1 = secKm(SEC, SEC.nx - 1);
   const P = plotFrame($("ac"), [x0, x1], [lagMax, 0], "distance along the line (km)", "lag (s)");
   if (P){
     const W = Math.max(1, Math.round(P.w - P.L - P.R)), Hh = Math.max(1, Math.round(P.h - P.T - P.B));
@@ -242,6 +245,21 @@ function drawAC(){
 function setPick(k){ PICK = k; $("pickA").setAttribute("aria-pressed", String(k === "A")); $("pickB").setAttribute("aria-pressed", String(k === "B")); }
 $("pickA").addEventListener("click", () => setPick("A"));
 $("pickB").addEventListener("click", () => setPick("B"));
+/* On a marine line the seafloor is usually the reflector whose multiples
+   matter most, and it is already picked on the first step. */
+$("btnSf").addEventListener("click", async () => {
+  const idx = seafloorIdx(SEC);
+  if (!idx) return;
+  for (let i = 0; i < SEC.nx; i++) if (idx[i] < 0 || idx[i] > SEC.ns - 1) idx[i] = NaN;
+  H.A = idx;
+  await kvSet("multiplePicks", {ts: SEC.ts, A: Array.from(H.A), B: H.B ? Array.from(H.B) : null});
+  if (!H.B) setPick("B");
+  drawAll();
+});
+$("btnCsv").addEventListener("click", () => {
+  if (!H.A && !H.B) return;
+  exportPicksCSV(SEC, {A: H.A, B: H.B}, "horizons");
+});
 $("btnClear").addEventListener("click", async () => { H = {A: null, B: null}; setPick("A"); await kvDelete("multiplePicks"); drawAll(); });
 ["sA", "sB", "pAB", "iAB"].forEach(k => $(k).addEventListener("change", drawAll));
 ["w0", "w1"].forEach(k => $(k).addEventListener("change", () => { autocorr(); drawAC(); }));

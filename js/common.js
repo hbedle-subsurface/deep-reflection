@@ -52,13 +52,32 @@ const OPTIONAL = STEPS.filter(s => s.stage && s.id !== "line");
 let LINE = null;       // {name, file, nx, ns, dt, delayMs, dx, dist}
 let DISP = {cmap:"gray", clip:99, gain:1, polarity:1, ve:0, hscale: SITE.panelScale || 1};
 let VMODEL = null;     // the 1D velocity model, where the site shows depth
+let SEAFLOOR = null;   // {f: file trace indices, t: seconds, src} or null
+let MUTE = null;       // {on, marginMs, taperMs}: the water-column mute
 const PREFIX = location.pathname.includes("/pages/") ? "../" : "";
 
-/* ---------- geometry ---------- */
-function kmAt(iRaw){
-  if (!LINE) return iRaw;
-  const i = Math.max(0, Math.min(LINE.nx - 1, iRaw));
-  return LINE.dist ? LINE.dist[i] / 1000 : i * (LINE.dx || 1) / 1000;
+/* ---------- geometry ----------
+   Trace positions are indices of traces in the file. A section records the
+   file trace of its first trace (i0) and how many file traces lie between its
+   neighbors (istep): the whole line as read may be every few traces of a long
+   file, while a crop read again from the file holds every trace. */
+function kmAt(iFile){
+  if (!LINE) return iFile;
+  const n = LINE.ntrFile || LINE.nx;
+  const i = Math.max(0, Math.min(n - 1, iFile));
+  if (!LINE.dist) return i * (LINE.dx || 1) / 1000;
+  const a = Math.floor(i), b = Math.min(n - 1, a + 1), f = i - a;
+  return ((1 - f) * LINE.dist[a] + f * LINE.dist[b]) / 1000;
+}
+/* File trace of trace i of a section, and its distance in km. */
+function fileIdx(sec, i){ return sec.i0 + i * (sec.istep || 1); }
+function secKm(sec, i){ return kmAt(fileIdx(sec, i)); }
+/* Mean trace spacing over a section in meters, from the distances the axes
+   use. */
+function traceSpacingM(sec){
+  if (!LINE || !sec || sec.nx < 2) return SITE.defaultDx || 25;
+  const d = (secKm(sec, sec.nx - 1) - secKm(sec, 0)) * 1000 / (sec.nx - 1);
+  return d > 0 ? d : (SITE.defaultDx || 25);
 }
 function secAt(jRaw){
   if (!LINE) return jRaw;
@@ -67,11 +86,73 @@ function secAt(jRaw){
 function sectionOf(rec){
   if (!rec) return null;
   return {data: rec.data, nx: rec.nx, ns: rec.ns, dt: rec.dt, j0: rec.j0 || 0,
-          i0: (rec.meta && rec.meta.i0) || 0, stage: rec.stage, meta: rec.meta || {}, ts: rec.ts};
+          i0: (rec.meta && rec.meta.i0) || 0, istep: (rec.meta && rec.meta.istep) || 1,
+          stage: rec.stage, meta: rec.meta || {}, ts: rec.ts};
 }
 function extentOf(sec){
-  return {x0: kmAt(sec.i0), x1: kmAt(sec.i0 + sec.nx - 1),
-          t0: secAt(sec.j0), t1: secAt(sec.j0 + sec.ns - 1)};
+  return {x0: secKm(sec, 0), x1: secKm(sec, sec.nx - 1),
+          t0: secAt(sec.j0), t1: secAt(sec.j0 + sec.ns - 1),
+          fMid: fileIdx(sec, (sec.nx - 1) / 2)};
+}
+
+/* ---------- seafloor, water-column mute, model at a place ---------- */
+/* Seafloor two-way time (s) at a file trace, interpolated between picks. */
+function seafloorAt(f){
+  const S = SEAFLOOR;
+  if (!S || !S.f || !S.f.length) return NaN;
+  const F = S.f, T = S.t, n = F.length;
+  if (f <= F[0]) return T[0];
+  if (f >= F[n - 1]) return T[n - 1];
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1){ const m = (lo + hi) >> 1; if (F[m] <= f) lo = m; else hi = m; }
+  const u = (f - F[lo]) / Math.max(1e-9, F[hi] - F[lo]);
+  return T[lo] + u * (T[hi] - T[lo]);
+}
+/* Seafloor time for each trace of a section, as a sample index of it. */
+function seafloorIdx(sec){
+  if (!SEAFLOOR) return null;
+  const out = new Float32Array(sec.nx), t0 = secAt(sec.j0), dts = sec.dt * 1e-6;
+  for (let i = 0; i < sec.nx; i++) out[i] = (seafloorAt(fileIdx(sec, i)) - t0) / dts;
+  return out;
+}
+/* The velocity model at a file trace: on a marine line the water layer takes
+   its thickness from the seafloor there, or from the entered depth. */
+function modelAt(f){
+  if (!VMODEL) return null;
+  if (!VMODEL.marine) return VMODEL;
+  const t = seafloorAt(f);
+  return Object.assign({}, VMODEL, {waterKm: isFinite(t) ? t * V_WATER / 2 : (VMODEL.waterKm || 0)});
+}
+function modelFor(e){ return modelAt(e && isFinite(e.fMid) ? e.fMid : 0); }
+
+/* First live sample of each trace of a section under the water-column mute,
+   or null with no mute. The mute starts marginMs above the seafloor, so the
+   seafloor reflection itself is kept, and rises over taperMs above that. */
+function muteFor(sec){
+  if (!SEAFLOOR || !MUTE || !MUTE.on) return null;
+  const idx = seafloorIdx(sec), m = MUTE.marginMs * 1000 / sec.dt;
+  const out = new Int32Array(sec.nx);
+  for (let i = 0; i < sec.nx; i++) out[i] = Math.max(0, Math.min(sec.ns, Math.floor(idx[i] - m)));
+  return out;
+}
+/* Apply the mute to a section's samples, in place. With hard set, only the
+   fully muted part above the taper is set to zero again: filters that are not
+   local, such as the f-k filter, spread energy back into the water column,
+   and balancing would then raise it to the level of the signal, so every
+   filter output is muted again this way. */
+function applyMute(sec, data, hard){
+  const live = muteFor(sec);
+  if (!live) return data;
+  const nt = Math.max(1, Math.round((MUTE.taperMs || 0) * 1000 / sec.dt));
+  for (let i = 0; i < sec.nx; i++){
+    const L = live[i], b = i * sec.ns;
+    for (let j = 0; j < Math.min(L, sec.ns); j++){
+      const k = L - j;              // samples above the first live one
+      if (k > nt) data[b + j] = 0;
+      else if (!hard) data[b + j] *= 0.5 + 0.5 * Math.cos(Math.PI * k / nt);
+    }
+  }
+  return data;
 }
 
 /* ---------- small helpers ---------- */
@@ -91,6 +172,7 @@ function energyShare(rem, inp){
   for (let k = 0; k < inp.length; k++){ a += rem[k]*rem[k]; b += inp[k]*inp[k]; }
   return b > 0 ? 100 * a / b : 0;
 }
+function ordinal(n){ const t = n % 100, u = n % 10; return n + (t > 10 && t < 14 ? "th" : u === 1 ? "st" : u === 2 ? "nd" : u === 3 ? "rd" : "th"); }
 function fmt(v, d){ return isFinite(v) ? v.toFixed(d === undefined ? 2 : d) : "–"; }
 
 /* ---------- header, step tags, cards, footer ---------- */
@@ -100,7 +182,11 @@ AX = {rule:"#3b4549", tick:"#9fb0b6", label:"#dfe6e9",
 
 async function pageShell(stepId){
   LINE = await kvGet("line");
-  if (SITE.depthScale && typeof VMODEL_DEFAULT !== "undefined") VMODEL = (await kvGet("vmodel")) || Object.assign({}, VMODEL_DEFAULT);
+  if (SITE.depthScale && typeof VMODEL_DEFAULT !== "undefined") VMODEL = Object.assign({}, VMODEL_DEFAULT, (await kvGet("vmodel")) || {});
+  SEAFLOOR = await kvGet("seafloor");
+  MUTE = await kvGet("mute");
+  CROPBOX = await kvGet("crop");
+  NOTES = await stageNotes().catch(() => ({log: {}, qc: {}}));
   if (SITE.theme) document.body.classList.add("theme-" + SITE.theme);
   // on the paper exhibits the axes are ink rather than chalk
   if (SITE.theme === "cork") AX = {rule:"#b9ad93", tick:"#4d3722", label:"#2b1d10", accent:"#a3261c",
@@ -113,8 +199,10 @@ async function pageShell(stepId){
   const tags = STEPS.map(s => {
     let cls = "tag";
     if (s.stage && s.id !== "line" && !have.includes(s.stage)) cls += " skipped";
-    return '<a class="' + cls + '" href="' + PREFIX + 'pages/' + s.file + '"' +
-      (s.id === stepId ? ' aria-current="page"' : "") + ' title="' + s.blurb + '"><span>' + s.n + "</span>" + s.title + "</a>";
+    const fl = stepFlags(s, have);
+    if (fl.length) cls += " flagged";
+    return '<a class="' + cls + '" data-sid="' + s.id + '" href="' + PREFIX + 'pages/' + s.file + '"' +
+      (s.id === stepId ? ' aria-current="page"' : "") + ' title="' + escAttr(s.blurb + (fl.length ? "\nFlagged: " + fl.join(" ") : "")) + '"><span>' + s.n + "</span>" + s.title + "</a>";
   }).join("");
   top.innerHTML =
     '<div class="case"><h1><a href="' + PREFIX + 'index.html">' + SITE.title + '</a></h1>' +
@@ -127,6 +215,8 @@ async function pageShell(stepId){
   // the controls on the right are grouped into pinned cards, one per heading
   const side = document.querySelector("aside.side");
   if (side){ cardify(side); watchCards(side); }
+  CURRENT_STEP = stepId;
+  if (side && LINE && stepId !== "index") recordCard(side);
 
   const foot = document.createElement("footer");
   foot.className = "foot";
@@ -152,6 +242,8 @@ async function pageShell(stepId){
   document.addEventListener("click", e => {
     const b = e.target.closest("[data-help]");
     if (b){ e.preventDefault(); openHelp(b.dataset.help); }
+    const x = e.target.closest("[data-exp]");
+    if (x){ e.preventDefault(); x.dataset.exp === "png" ? exportPanelPNG(x.dataset.panel) : exportPanelSegy(x.dataset.panel); }
   });
   return LINE;
 }
@@ -285,7 +377,7 @@ function sliceArr(arr, sec, v){
   return o;
 }
 function sliceSec(sec, v){
-  return Object.assign({}, sec, {nx: v.i1 - v.i0 + 1, ns: v.j1 - v.j0 + 1, i0: sec.i0 + v.i0, j0: sec.j0 + v.j0});
+  return Object.assign({}, sec, {nx: v.i1 - v.i0 + 1, ns: v.j1 - v.j0 + 1, i0: sec.i0 + v.i0 * (sec.istep || 1), j0: sec.j0 + v.j0});
 }
 /* Position of section sample (i, j) as a fraction of the panel frame. */
 function fracOf(id, i, j){
@@ -353,12 +445,15 @@ function makePanel(host, id, title, opts){
   el.id = id;
   el.innerHTML =
     '<div class="cap"><h3 id="' + id + '-title">' + title + '</h3><span class="pnote" id="' + id + '-note"></span>' +
-      (opts.tools ? '<span class="ptools" id="' + id + '-tools"></span>' : "") + "</div>" +
+      (opts.tools ? '<span class="ptools" id="' + id + '-tools"></span>' : "") +
+      '<span class="pexp no-gloss"><button data-exp="png" data-panel="' + id + '" title="Save this panel as an image, with its axes">PNG</button>' +
+      '<button data-exp="segy" data-panel="' + id + '" title="Save the whole section behind this panel as a SEG-Y file">SEG-Y</button></span>' + "</div>" +
     '<div class="plot' + (SITE.depthScale ? " withdepth" : "") + '" style="--ph:' + Math.round((opts.height || 300) * (DISP.hscale || 1)) + 'px" data-ph="' + (opts.height || 300) + '">' +
       '<canvas class="yax" id="' + id + '-y"></canvas>' +
       '<div class="frame crosshair" id="' + id + '-frame">' +
         '<canvas class="img" id="' + id + '-img"></canvas>' +
         '<canvas class="cls" id="' + id + '-cls"></canvas>' +
+        '<canvas class="sf" id="' + id + '-sf"></canvas>' +
         '<canvas class="ovl" id="' + id + '-ovl"></canvas>' +
         '<div class="ro" id="' + id + '-ro" hidden></div>' +
       "</div>" +
@@ -383,6 +478,26 @@ function drawAxes(id, sub){
   drawYAxis(id + "-y", e.t0, e.t1, "two-way time (s)", 1, 0);
   drawXAxis(id + "-x", e.x0, e.x1, LINE && (LINE.dist || LINE.dx) ? "distance along the line (km)" : "trace");
   if (SITE.depthScale && $(id + "-dax")) drawDepthAxis(id, e);
+  drawSeafloorGuide(id, sub);
+}
+
+/* The picked seafloor as a thin dashed line over any section panel, where the
+   display settings ask for it. */
+function drawSeafloorGuide(id, sub){
+  const cv = $(id + "-sf");
+  if (!cv) return;
+  const {ctx, w, h, ok} = fitCanvas(cv);
+  if (!ok || !SEAFLOOR || DISP.seafloor === false) return;
+  const idx = seafloorIdx(sub);
+  ctx.strokeStyle = "#1f7ab8"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  let on = false;
+  for (let i = 0; i < sub.nx; i++){
+    const x = i / Math.max(1, sub.nx - 1) * w, y = idx[i] / Math.max(1, sub.ns - 1) * h;
+    if (!isFinite(y) || y < -2 || y > h + 2){ on = false; continue; }
+    on ? ctx.lineTo(x, y) : ctx.moveTo(x, y); on = true;
+  }
+  ctx.stroke(); ctx.setLineDash([]);
 }
 
 /* Depth down the right side, from the velocity model. The ticks are evenly
@@ -393,19 +508,20 @@ function drawDepthAxis(id, e){
   const cv = $(id + "-dax");
   const {ctx, w, h, ok} = fitCanvas(cv);
   if (!ok || !VMODEL) return;
-  const z0 = depthAtTime(e.t0, VMODEL), z1 = depthAtTime(e.t1, VMODEL);
-  const Y = z => (timeAtDepth(z, VMODEL) - e.t0) / (e.t1 - e.t0) * h;
+  const M = modelFor(e);
+  const z0 = depthAtTime(e.t0, M), z1 = depthAtTime(e.t1, M);
+  const Y = z => (timeAtDepth(z, M) - e.t0) / (e.t1 - e.t0) * h;
   ctx.strokeStyle = AX.tick; ctx.fillStyle = AX.tick; ctx.font = AX.font; ctx.lineWidth = 1;
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
   const ticks = niceTicks(z0, z1, Math.max(3, Math.round(h / 45))), step = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
-  const myy = Y(mohoDepth(VMODEL));
+  const myy = Y(mohoDepth(M));
   for (const z of ticks){
     const y = Y(z); if (y < 0 || y > h) continue;
     if (Math.abs(y - myy) < 12) continue;
     ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(5, y + .5); ctx.stroke();
     ctx.fillText(fmtTick(z, step), 7, y);
   }
-  const mz = mohoDepth(VMODEL), my = Y(mz);
+  const mz = mohoDepth(M), my = Y(mz);
   if (my > 0 && my < h){
     ctx.strokeStyle = AX.accent || "#ffd166"; ctx.fillStyle = AX.accent || "#ffd166";
     ctx.beginPath(); ctx.moveTo(0, my + .5); ctx.lineTo(w, my + .5); ctx.stroke();
@@ -414,7 +530,9 @@ function drawDepthAxis(id, e){
   ctx.save(); ctx.translate(40, h / 2); ctx.rotate(Math.PI / 2);
   ctx.fillStyle = AX.label; ctx.font = AX.labelFont; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const ve = veOf(id, e);
-  ctx.fillText("depth (km)" + (ve ? ", VE " + (ve >= 1 ? ve.toFixed(1) : ve.toPrecision(2)) + " : 1" : ""), 0, 0); ctx.restore();
+  // on a marine line the depth scale holds at one place, the middle of the view
+  const at = VMODEL.marine && SEAFLOOR ? " at " + fmt(kmAt(e.fMid), 1) + " km" : "";
+  ctx.fillText("depth (km)" + at + (ve ? ", VE " + (ve >= 1 ? ve.toFixed(1) : ve.toPrecision(2)) + " : 1" : ""), 0, 0); ctx.restore();
 }
 
 /* Vertical exaggeration of what is on screen: the vertical scale in depth
@@ -422,8 +540,8 @@ function drawDepthAxis(id, e){
    exaggeration chosen, the panel height is set to give it. */
 function veOf(id, e){
   if (!VMODEL) return null;
-  const r = $(id + "-frame").getBoundingClientRect();
-  const zr = depthAtTime(e.t1, VMODEL) - depthAtTime(e.t0, VMODEL), xr = Math.abs(e.x1 - e.x0);
+  const r = $(id + "-frame").getBoundingClientRect(), M = modelFor(e);
+  const zr = depthAtTime(e.t1, M) - depthAtTime(e.t0, M), xr = Math.abs(e.x1 - e.x0);
   if (!(zr > 0 && xr > 0 && r.width > 0)) return null;
   return (r.height / zr) / (r.width / xr);
 }
@@ -432,8 +550,8 @@ function applyVE(id, sub){
   const plot = $(id + "-frame").parentElement;
   const base = +plot.dataset.ph || 300;
   if (!DISP.ve){ plot.style.setProperty("--ph", Math.round(base * (DISP.hscale || 1)) + "px"); return; }
-  const e = extentOf(sub), w = $(id + "-frame").getBoundingClientRect().width;
-  const zr = depthAtTime(e.t1, VMODEL) - depthAtTime(e.t0, VMODEL), xr = Math.abs(e.x1 - e.x0);
+  const e = extentOf(sub), w = $(id + "-frame").getBoundingClientRect().width, M = modelFor(e);
+  const zr = depthAtTime(e.t1, M) - depthAtTime(e.t0, M), xr = Math.abs(e.x1 - e.x0);
   if (!(zr > 0 && xr > 0 && w > 0)) return;
   const hpx = Math.max(140, Math.min(1600, w * (zr / xr) * DISP.ve));
   plot.style.setProperty("--ph", Math.round(hpx) + "px");
@@ -538,7 +656,7 @@ function attachReadout(id){
   fr.addEventListener("mousemove", ev => {
     const P = PANEL_DATA[id], s = frameToSample(id, ev);
     if (!P || !s){ ro.hidden = true; return; }
-    const km = kmAt(P.sec.i0 + s.i), t = secAt(P.sec.j0 + s.j);
+    const km = secKm(P.sec, s.i), t = secAt(P.sec.j0 + s.j);
     let txt = fmt(km, 2) + " km, " + fmt(t, 3) + " s";
     if (P.arr) txt += ", " + P.arr[s.i * P.sec.ns + s.j].toPrecision(3);
     if (P.extra) txt += P.extra(s);
@@ -615,6 +733,7 @@ function displayControls(host, onChange){
     '<label for="dGain">Display gain <b><span id="v-dGain"></span>×</b></label>' +
     '<input type="range" id="dGain" min="0.25" max="4" step="0.05">' +
     '<label class="toggle"><input type="checkbox" id="dPol"> Reverse polarity</label>' +
+    (SEAFLOOR ? '<label class="toggle"><input type="checkbox" id="dSf"> Show the picked seafloor</label>' : "") +
     '<label for="dH">Panel height <b><span id="v-dH"></span>×</b></label>' +
     '<input type="range" id="dH" min="0.6" max="3" step="0.1">' +
     (SITE.depthScale ? '<label for="dVe">Vertical exaggeration</label><select id="dVe">' +
@@ -625,6 +744,7 @@ function displayControls(host, onChange){
   const sync = () => {
     $("dCmap").value = DISP.cmap; $("dClip").value = DISP.clip; $("dGain").value = DISP.gain;
     $("dPol").checked = DISP.polarity < 0;
+    if ($("dSf")) $("dSf").checked = DISP.seafloor !== false;
     if ($("dVe")) $("dVe").value = DISP.ve || 0;
     $("dH").value = DISP.hscale || 1; $("v-dH").textContent = (+DISP.hscale || 1).toFixed(1);
     $("v-dClip").textContent = (+DISP.clip).toFixed(1);
@@ -633,11 +753,12 @@ function displayControls(host, onChange){
   sync();
   const upd = () => {
     DISP = {cmap: $("dCmap").value, clip: +$("dClip").value, gain: +$("dGain").value,
-            polarity: $("dPol").checked ? -1 : 1, ve: $("dVe") ? +$("dVe").value : 0, hscale: +$("dH").value};
+            polarity: $("dPol").checked ? -1 : 1, ve: $("dVe") ? +$("dVe").value : 0, hscale: +$("dH").value,
+            seafloor: $("dSf") ? $("dSf").checked : DISP.seafloor};
     sync(); kvSet("display", DISP).catch(() => {});
     onChange();
   };
-  ["dCmap", "dClip", "dGain", "dPol", "dVe", "dH"].forEach(k => { if ($(k)) $(k).addEventListener("input", upd); });
+  ["dCmap", "dClip", "dGain", "dPol", "dVe", "dH", "dSf"].forEach(k => { if ($(k)) $(k).addEventListener("input", upd); });
 }
 
 /* ---------- small line plots on fixed axes ---------- */
@@ -697,4 +818,247 @@ function fAxisMax(dt_us){ return Math.min(150, 0.5 / (dt_us * 1e-6)); }
 /* ---------- measured band and modern-data presets ---------- */
 async function measuredBand(){
   return kvGet("band");
+}
+
+
+/* ============================ getting results out ============================
+   Every section panel can be saved two ways: as an image of what is on the
+   screen, axes and color bar included, and as a SEG-Y file of the whole
+   section behind it (not only the zoomed part), with the CDP numbers and
+   coordinates of the file it came from. Horizons and the seafloor are saved as
+   CSV tables by the pages that pick them. */
+function saveBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function fileStem(extra){
+  const base = ((LINE && LINE.name) || "line").replace(/\.(sgy|segy)$/i, "");
+  return (base + (extra ? "_" + extra : "")).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/_+/g, "_").slice(0, 90);
+}
+function panelTitle(id){ const h = $(id + "-title"); return h ? h.textContent.trim() : id; }
+
+function exportPanelPNG(id){
+  const plot = $(id + "-frame") && $(id + "-frame").parentElement;
+  if (!plot) return;
+  const pr = plot.getBoundingClientRect(), S = 2, top = 30, foot = 18;
+  const out = document.createElement("canvas");
+  out.width = Math.round(pr.width * S); out.height = Math.round((pr.height + top + foot) * S);
+  const g = out.getContext("2d");
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, out.width, out.height);
+  g.scale(S, S);
+  plot.querySelectorAll("canvas").forEach(cv => {
+    const r = cv.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0) || cv.width < 2) return;
+    g.globalAlpha = +(getComputedStyle(cv).opacity || 1);
+    g.drawImage(cv, r.left - pr.left, r.top - pr.top + top, r.width, r.height);
+  });
+  g.globalAlpha = 1;
+  g.fillStyle = "#16191C"; g.font = "600 14px Georgia, serif"; g.textBaseline = "middle";
+  const st = STEPS.find(x => PREFIX && location.pathname.endsWith("/" + x.file));
+  g.fillText((st ? st.title + ": " : "") + panelTitle(id), 6, top / 2);
+  g.fillStyle = "#5C6670"; g.font = "10px Georgia, serif";
+  g.fillText(((LINE && LINE.name) || "") + ". " + SITE.title + ", " + location.host + location.pathname.replace(/pages\/.*$/, ""), 6, pr.height + top + foot / 2);
+  const step = STEPS.find(x => PREFIX && location.pathname.endsWith("/" + x.file));
+  out.toBlob(b => saveBlob(b, fileStem((step ? step.id + "_" : "") + panelTitle(id)) + ".png"), "image/png");
+}
+
+/* CDP numbers and coordinates for the traces of a section, from the file. */
+function traceHeadersFor(sec){
+  const n = sec.nx, cdp = new Int32Array(n);
+  const G = LINE && LINE.geo;
+  let x = null, y = null, geo = false;
+  if (G && G.lon){ x = new Float64Array(n); y = new Float64Array(n); geo = true; }
+  else if (G && G.x){ x = new Float64Array(n); y = new Float64Array(n); }
+  const ft = G && G.units === "ft" ? 0.3048 : 1;
+  for (let i = 0; i < n; i++){
+    const f = Math.round(fileIdx(sec, i));
+    cdp[i] = LINE && LINE.cdpF ? LINE.cdpF[Math.min(LINE.cdpF.length - 1, f)] : f + 1;
+    if (geo){ x[i] = G.lon[f]; y[i] = G.lat[f]; }
+    else if (x){ x[i] = G.x[f] * ft; y[i] = G.y[f] * ft; }
+  }
+  return {cdp, x, y, geo};
+}
+
+async function exportPanelSegy(id){
+  const P = PANEL_DATA[id];
+  if (!P || !P.arr){ $(id + "-note").textContent = "This panel holds a color blend of several attributes, which a SEG-Y trace cannot carry."; return; }
+  const sec = P.sec, H = traceHeadersFor(sec);
+  const f0 = fileIdx(sec, 0), f1 = fileIdx(sec, sec.nx - 1);
+  const have = await stageList().catch(() => []);
+  const stages = STAGES.filter(k => k !== "raw" && have.includes(k));
+  const step = STEPS.find(x => PREFIX && location.pathname.endsWith("/" + x.file));
+  const lines = [
+    "C01 WRITTEN BY " + SITE.title + ", HBEDLE-SUBSURFACE.GITHUB.IO",
+    "C02 SOURCE FILE: " + ((LINE && LINE.name) || ""),
+    "C03 CONTENT: " + (step ? "STEP " + step.n + " " + step.title + ", " : "") + panelTitle(id) + (P.unit ? " (" + P.unit + ")" : ""),
+    "C04 WORKFLOW STAGES PRESENT: " + stages.join(", "),
+    "C05 FILE TRACES " + (f0 + 1) + " TO " + (f1 + 1) + (sec.istep > 1 ? ", EVERY " + ordinal(sec.istep) : ""),
+    "C06 COORDINATES: " + (H.geo ? "SECONDS OF ARC, SCALAR -100, BYTE 89 = 2" : H.x ? "METERS, SCALAR -100" : "NONE IN THE SOURCE FILE"),
+    "C07 SAMPLES: IEEE FLOAT; FIRST SAMPLE AT " + Math.round(secAt(sec.j0) * 1000) + " MS (BYTE 109)",
+    MUTE && MUTE.on && SEAFLOOR ? "C08 WATER COLUMN MUTED FROM " + MUTE.marginMs + " MS ABOVE THE PICKED SEAFLOOR" : "C08",
+    "C09 LICENSE OF THE TOOL: CC BY-SA 4.0. THE DATA KEEP THE TERMS OF THEIR SOURCE."
+  ];
+  for (let k = lines.length; k < 39; k++) lines.push("C" + String(k + 1).padStart(2, "0"));
+  lines.push("C40 END TEXTUAL HEADER");
+  const buf = writeSegy(P.arr, sec.nx, sec.ns, sec.dt, H, secAt(sec.j0) * 1000, lines);
+  saveBlob(new Blob([buf], {type: "application/octet-stream"}), fileStem((step ? step.id + "_" : "") + panelTitle(id)) + ".sgy");
+}
+
+/* A table of picked times along a section: one row per trace, one column of
+   time and one of model depth per pick. picks: {name: sample index per trace}. */
+function exportPicksCSV(sec, picks, name){
+  const G = LINE && LINE.geo, geo = G && G.lon, xy = !geo && G && G.x;
+  const names = Object.keys(picks).filter(k => picks[k]);
+  let head = "file_trace,cdp,distance_km" + (geo ? ",longitude,latitude" : xy ? ",x,y" : "");
+  names.forEach(k => { head += "," + k + "_twt_s" + (VMODEL ? "," + k + "_depth_km" : ""); });
+  const rows = [head];
+  for (let i = 0; i < sec.nx; i++){
+    const f = Math.round(fileIdx(sec, i));
+    let r = (f + 1) + "," + (LINE.cdpF ? LINE.cdpF[f] : f + 1) + "," + secKm(sec, i).toFixed(4);
+    if (geo) r += "," + G.lon[f].toFixed(6) + "," + G.lat[f].toFixed(6);
+    else if (xy) r += "," + G.x[f] + "," + G.y[f];
+    const M = modelAt(f);
+    names.forEach(k => {
+      const j = picks[k][i];
+      if (!isFinite(j)){ r += "," + (VMODEL ? "," : ""); return; }
+      const t = secAt(sec.j0 + j);
+      r += "," + t.toFixed(4) + (VMODEL ? "," + depthAtTime(t, M).toFixed(3) : "");
+    });
+    rows.push(r);
+  }
+  saveBlob(new Blob([rows.join("\n") + "\n"], {type: "text/csv"}), fileStem(name) + ".csv");
+}
+
+
+/* ============================ record and checks ============================
+   What has been done to the line, step by step, visible on every page.
+
+   NOTES holds, per stage, the settings a step ran with ("log") and the checks
+   flagged on its output ("qc"), written as the step runs and cleared when it
+   or anything before it runs again. Each setting is shown with where its value
+   came from: measured from this line, taken from the velocity model or the
+   file, the tool's starting value, or changed by hand. */
+let NOTES = {log: {}, qc: {}}, CROPBOX = null, CURRENT_STEP = null;
+function escAttr(t){ return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+/* Flags of a processing step that is applied, as plain sentences. */
+function stepFlags(s, have){
+  if (!s.stage || s.id === "line" || !have.includes(s.stage)) return [];
+  const q = NOTES.qc[s.stage];
+  return q && q.flags ? q.flags : [];
+}
+
+/* Store the flagged rows of a step's checks, and mark the step in the strip. */
+async function recordChecks(stage, rows){
+  const flags = rows.filter(r => r.flag).map(r => r.name + ": " + r.flag);
+  NOTES.qc[stage] = {flags};
+  await kvSet("qc:" + stage, {flags}).catch(() => {});
+  const s = STEPS.find(x => x.stage === stage);
+  const a = s && document.querySelector('.stages a[data-sid="' + s.id + '"]');
+  if (a){ a.classList.toggle("flagged", flags.length > 0); a.title = s.blurb + (flags.length ? "\nFlagged: " + flags.join(" ") : ""); }
+  refreshRecord();
+}
+
+/* Settings of each processing step as [label, value, keys]. */
+const RECORD_FMT = {
+  gain: p => p.mode === "agc" ? [["AGC window", p.agcMs + " ms", ["agcMs"]]]
+                             : [["Time gain exponent n", fmt(p.n, 1), ["n"]]],
+  fk: p => [["Dip limit", fmt(p.dipMax, 2) + " samples per trace", ["dipMax"]],
+            ["Transition", p.tapPct + "% of the limit", ["tapPct"]],
+            ["Pass band", p.fLo > 0 || p.fHi < 0.5 / (p.dt * 1e-6) - 1 ? p.fLo + " to " + p.fHi + " Hz" : "no frequency limit", ["fLo", "fHi"]]],
+  mig: p => [["Velocity", fmt(p.v, 2) + " km/s", ["v"]], ["Trace spacing", fmt(p.dx, 1) + " m", ["dx"]]],
+  sos: p => [["Smoothing length", p.len + " traces", ["len"]], ["Dip estimation window", fmt(p.sig, 1) + " samples", ["sig"]],
+             ["Edge protection", fmt(p.gate, 1), ["gate"]], ["Strength", fmt(p.str, 2), ["str"]]],
+  balance: p => [["Balancing in time", fmt(p.strength, 2), ["strength"]], ["Flattening across frequency", fmt(p.flatten, 2), ["flatten"]],
+                 ["Envelope window", p.smoothMs + " ms", ["smoothMs"]], ["Bands", p.nb, ["nb"]], ["Stability floor", p.floorPct + "%", ["floorPct"]],
+                 ["Taper", p.f1 + ", " + p.f2 + ", " + p.f3 + ", " + p.f4 + " Hz", ["f1", "f2", "f3", "f4"]]]
+};
+function originOf(L, keys){
+  const same = k => L.start && isFinite(L.start[k]) && Math.abs(L.params[k] - L.start[k]) < 1e-9;
+  if (!keys.every(same)) return "set by hand";
+  const o = L.origin && keys.map(k => L.origin[k]).find(Boolean);
+  return o || "starting value";
+}
+
+function recordHTML(){
+  const have = Object.keys(NOTES.log);
+  const link = s => '<a href="' + PREFIX + "pages/" + s.file + '">' + s.n + ". " + s.title + "</a>";
+  const cur = s => s.id === CURRENT_STEP ? ' class="here"' : "";
+  let h = '<ol class="record">';
+  // the first step: file, crop, positions, seafloor, model
+  const s1 = STEPS.find(x => x.id === "line"), C = NOTES.log.crop;
+  const items = [];
+  if (C){
+    const nFile = (C.nx - 1) * (C.istep || 1) + 1;
+    items.push(LINE.name + ": " + nFile + " of " + (LINE.ntrFile || LINE.nx) + " traces" +
+      (C.istep > 1 ? ", every " + ordinal(C.istep) + " kept" : "") + ", " + fmt(secAt(C.j0), 2) + " to " + fmt(secAt(C.j0 + C.ns - 1), 2) + " s");
+  }
+  const G = LINE.geo || {};
+  items.push(LINE.dist ? "Positions from " + (COORD_NAMES[G.source] || "the headers") + ", " + (UNIT_NAMES[G.units] || G.units) +
+      ' <span class="o">' + (G.unitsFrom === "user" ? "set by hand" : G.unitsFrom === "inferred" ? "units inferred from the values" : "from the file") + "</span>"
+    : "Trace spacing " + (LINE.dx || SITE.defaultDx) + ' m <span class="o">' + (LINE.dx && LINE.dx !== SITE.defaultDx ? "set by hand" : "starting value, not from the file") + "</span>");
+  if (VMODEL && VMODEL.marine) items.push(SEAFLOOR ? "Seafloor " + (SEAFLOOR.src === "header" ? "from the header water depth" : "picked") +
+      (MUTE && MUTE.on ? "; water column muted from " + MUTE.marginMs + " ms above it" : "; water column not muted") : "Marine line, no seafloor picked");
+  if (VMODEL) items.push("Depth scale: " + vmodelLabel(VMODEL));
+  h += "<li" + cur(s1) + ">" + link(s1) + "<ul>" + items.map(t => "<li>" + t + "</li>").join("") + "</ul></li>";
+  // the processing steps
+  STEPS.filter(s => s.stage && s.id !== "line").forEach(s => {
+    const L = NOTES.log[s.stage];
+    if (!L){ h += '<li class="skipped' + (s.id === CURRENT_STEP ? " here" : "") + '">' + link(s) + ' <span class="o">skipped</span></li>'; return; }
+    const rows = RECORD_FMT[s.stage] && L.params ? RECORD_FMT[s.stage](L.params) : [];
+    const fl = stepFlags(s, have);
+    h += "<li" + cur(s) + ">" + link(s) + "<ul>" +
+      rows.map(([lab, val, keys]) => "<li>" + lab + " " + val + ' <span class="o">' + originOf(L, keys) + "</span></li>").join("") +
+      fl.map(t => '<li class="flag">' + t + "</li>").join("") + "</ul></li>";
+  });
+  return h + "</ol>";
+}
+
+function recordCard(side){
+  const c = document.createElement("div");
+  c.className = "card"; c.id = "recordCard";
+  c.innerHTML = '<h2>Record of this line<button class="help" data-help="record">Learn more</button></h2><div id="recordBody"></div>';
+  side.append(c);
+  $("recordBody").innerHTML = recordHTML();
+}
+async function refreshRecord(){
+  if (!$("recordBody")) return;
+  NOTES = await stageNotes().catch(() => NOTES);
+  CROPBOX = await kvGet("crop").catch(() => CROPBOX);
+  $("recordBody").innerHTML = recordHTML();
+}
+
+/* Before the attributes: whatever in the earlier steps affects what the
+   attributes and the classification will measure. Each item links to the
+   step where it is changed. level "flag" is a check that tripped or a setting
+   that changes the result; "note" is a fact about the data worth knowing. */
+function preflightItems(){
+  const out = [], have = Object.keys(NOTES.log);
+  const at = id => { const s = STEPS.find(x => x.id === id); return s ? ' <a href="' + PREFIX + "pages/" + s.file + '">Step ' + s.n + "</a>" : ""; };
+  const C = NOTES.log.crop;
+  if (C && C.istep > 1) out.push({level: "note", text: "The crop holds every " + ordinal(C.istep) + " trace of the file, so lateral detail finer than " +
+    fmt(C.istep * traceSpacingM({i0: 0, istep: 1, nx: 2}) , 0) + " m is not in it. A shorter time window or a narrower crop lets more traces in." + at("line")});
+  if (!LINE.dist) out.push({level: "note", text: "Distances come from a trace spacing of " + (LINE.dx || SITE.defaultDx) +
+    " m entered on the first step, not from the file. Lengths, dips in degrees and the migration depend on it." + at("line")});
+  if (VMODEL && VMODEL.marine && !(SEAFLOOR && MUTE && MUTE.on)) out.push({level: "flag", text: "The line crosses water and the water column is not muted, " +
+    "so its samples enter the attribute statistics and the self-organizing map." + at("line")});
+  if (SITE.gainStep && !have.includes("gain")) out.push({level: "note", text: "The amplitude step is skipped, so unless the archived stack already carries a gain, " +
+    "amplitude attributes fall with two-way time and the deep record reads as weak." + at("gain")});
+  STEPS.filter(s => s.stage && s.id !== "line").forEach(s => stepFlags(s, have).forEach(t =>
+    out.push({level: "flag", text: s.title + ": " + t + at(s.id)})));
+  if (have.includes("mig") && MUTE && MUTE.on) out.push({level: "note", text: "The migrated section is not muted again, since migration moves a dipping seafloor " +
+    "away from its unmigrated pick; the mute still keeps the water column out of the self-organizing map." + at("mig")});
+  return out;
+}
+function preflightBox(host){
+  const it = preflightItems();
+  const b = document.createElement("div");
+  b.className = "preflight";
+  b.innerHTML = "<h3>Before the attributes</h3>" + (it.length
+    ? "<ul>" + it.map(x => '<li class="pf-' + x.level + '">' + x.text + "</li>").join("") + "</ul>"
+    : "<p>Nothing in the earlier steps is flagged, and the crop holds every trace of the file inside it.</p>");
+  const br = host.querySelector(":scope > .brief");
+  if (br) br.after(b); else host.prepend(b);
 }

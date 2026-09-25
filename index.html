@@ -8,8 +8,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Special+Elite&display=swap">
 <link rel="stylesheet" href="assets/glossary.css">
 <link rel="stylesheet" href="css/style.css">
-<title>Seismic line analysis</title>
-<meta name="description" content="Load a 2D seismic line, condition it, compute attributes, classify them with a self-organizing map and read the result with SHAP, all in the browser. University of Oklahoma / AASPI.">
+<title>Cold Case: Legacy Seismic</title>
+<meta name="description" content="Open a legacy or science-collected 2D seismic line, such as a COCORP profile or a marine site-survey line, restore and filter it, pick the seafloor, compute attributes and classify them, all in the browser. University of Oklahoma.">
 </head>
 <body>
 <script>
@@ -96,17 +96,26 @@ async function openBuffer(ab, name, dx, sampleId){
   }
   setBusy("Storing the line…");
   await a2ClearAll();
+  const G = S.geom;
   const line = {
     name, sampleId: sampleId || null, nx: S.nx, ns: S.ns, dt: S.dt, delayMs: S.delayMs || 0,
-    dx: S.dist ? null : (dx || null), dist: S.dist ? Array.from(S.dist) : null,
+    dx: S.dist ? null : (dx || null), dist: S.dist || null,
     step: S.step, ntrFile: S.ntrFile, fmt: S.fmt,
     textual: S.textual, binary: S.binary, traceRows: S.traceRows,
-    cdp0: S.cdp[0], cdp1: S.cdp[S.nx - 1], opened: Date.now()
+    cdpF: S.cdp, cdp0: S.cdp[0], cdp1: S.cdp[S.ntrFile - 1],
+    geo: {source: G.source, bytes: G.bytes, units: G.units, unitsFrom: G.unitsFrom, repeated: G.repeated,
+          lon: G.lon, lat: G.lat, x: G.lon ? null : G.x, y: G.lon ? null : G.y},
+    waterDepthM: G.waterDepthM, opened: Date.now()
   };
+  // The file is kept in this browser, so a crop of a thinned line can be read
+  // again at full density and the coordinates can be read again from other
+  // header bytes. A file too large to store is simply not kept.
+  try { await kvSet("segyFile", {ab, layout: S.layout}); line.fileKept = true; }
+  catch (e){ line.fileKept = false; }
   await kvSet("line", line);
   const sec = {data: S.data, nx: S.nx, ns: S.ns, dt: S.dt, j0: 0};
-  await stageSave("raw", sec, {i0: 0});
-  await stageSave("crop", sec, {i0: 0, whole: true});
+  await stageSave("raw", sec, {i0: 0, istep: S.step});
+  await stageSave("crop", sec, {i0: 0, istep: S.step, whole: true});
   await kvSet("crop", {i0: 0, i1: S.nx - 1, j0: 0, j1: S.ns - 1});
   location.href = "pages/line.html";
 }

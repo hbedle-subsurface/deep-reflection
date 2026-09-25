@@ -84,6 +84,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/display.js"></script>
 <script src="../js/attributes.js"></script>
@@ -187,11 +188,11 @@ function rebuild(){
     if (m.type === "explain"){
       EXPL = m; drawLocal();
       const k = r.bmu[m.index];
-      $("sampleTitle").textContent = fmt(kmAt(SEC.i0 + SAMPLE.i), 2) + " km, " + fmt(secAt(SEC.j0 + SAMPLE.j), 3) +
+      $("sampleTitle").textContent = fmt(secKm(SEC, SAMPLE.i), 2) + " km, " + fmt(secAt(SEC.j0 + SAMPLE.j), 3) +
         " s: neuron row " + (Math.floor(k / r.side) + 1) + ", column " + (k % r.side + 1);
     }
   };
-  worker.postMessage({type: "rebuild", section: {data: SEC.data, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt},
+  worker.postMessage({type: "rebuild", section: {data: SEC.data, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt}, mute: muteFor(SEC),
                       keys: r.keys, params: r.params, facies: r.facies, win: r.win, tstep: r.tstep,
                       side: r.side, W: r.W, mean: r.mean, sd: r.sd, tau: r.tau, seed: r.seed});
 }
@@ -200,6 +201,7 @@ function pick(s){
   const r = run();
   const gi = s.i - r.win.i0, gj = Math.round((s.j - r.win.j0) / r.tstep);
   if (gi < 0 || gi >= r.gnx || gj < 0 || gj >= r.gnt){ $("sampleTitle").textContent = "That sample is outside the window this run was trained on."; return; }
+  if (r.bmu[gi * r.gnt + gj] === 255){ $("sampleTitle").textContent = "That sample is in the muted water column, which the map was not trained on."; return; }
   SAMPLE = {i: r.win.i0 + gi, j: r.win.j0 + gj * r.tstep};
   drawSection();
   if (!READY){ $("sampleTitle").textContent = "The run is still being prepared."; return; }

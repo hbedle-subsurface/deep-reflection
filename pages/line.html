@@ -40,8 +40,9 @@
     <h2>The file<button class="help" data-help="load">Learn more</button></h2>
     <div id="fileInfo" class="hint"></div>
 
-    <h2>Trace spacing</h2>
+    <h2>Trace positions<button class="help" data-help="coords">Learn more</button></h2>
     <div id="spacingBox"></div>
+    <div id="coordBox"></div>
 
     <h2>Crop</h2>
     <div class="guide"><p>With "Drag to crop" chosen above the section, a box dragged on it
@@ -68,6 +69,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/display.js"></script>
 <script src="../js/help.js"></script>
 <script src="../js/glossary.js"></script>
@@ -85,26 +87,14 @@ let RAW = null, CROP = null;
   const recS = (LINE.ns - 1) * LINE.dt * 1e-6;
   $("fileInfo").innerHTML =
     "<b>" + LINE.name + "</b><br>" +
-    LINE.nx + " traces" + (LINE.step > 1 ? " (every " + LINE.step + "th of " + LINE.ntrFile + ", to stay within browser memory)" : "") +
+    (LINE.step > 1 ? LINE.nx + " traces shown, every " + ordinal(LINE.step) + " of " + LINE.ntrFile + " to stay within browser memory" +
+      (LINE.fileKept ? "; a crop is read again from the file with as many traces as fit" : "")
+      : LINE.nx + " traces") +
     "<br>" + LINE.ns + " samples at " + (LINE.dt / 1000) + " ms, " + recS.toFixed(2) + " s of record" +
     "<br>First sample at " + (LINE.delayMs || 0) + " ms" +
     "<br>CDP " + LINE.cdp0 + " to " + LINE.cdp1;
-
-  if (LINE.dist){
-    $("spacingBox").innerHTML = '<p class="hint">Distance is taken from the CDP coordinates in the trace headers: ' +
-      (LINE.dist[LINE.dist.length - 1] / 1000).toFixed(2) + " km along the line, " +
-      (LINE.dist[LINE.dist.length - 1] / Math.max(1, LINE.nx - 1)).toFixed(1) + " m between traces on average.</p>";
-  } else {
-    $("spacingBox").innerHTML =
-      '<p class="hint">The trace headers carry no usable coordinates, so the distance axis uses a spacing entered here.</p>' +
-      '<label>Trace spacing, m<input type="number" id="dx" min="0.5" step="0.5" value="' + (LINE.dx || SITE.defaultDx) + '"></label>';
-    if (!LINE.dx){ LINE.dx = SITE.defaultDx; await kvSet("line", LINE); }
-    $("dx").addEventListener("change", async () => {
-      LINE.dx = Math.max(0.5, +$("dx").value || SITE.defaultDx);
-      await kvSet("line", LINE);
-      redraw();
-    });
-  }
+  spacingBox();
+  if (LINE.fileKept) coordCard();
 
   const smp = LINE.sampleId && SITE.samples.find(x => x.id === LINE.sampleId);
   if (smp && (smp.notes || smp.figures)){
@@ -117,6 +107,8 @@ let RAW = null, CROP = null;
       (smp.refs && smp.refs.length ? '<h3>References</h3><ul class="refs">' + smp.refs.map(r => "<li>" + r + "</li>").join("") + "</ul>" : "");
     $("side").append(c);
   }
+  if (LINE.geo && (LINE.geo.lon || LINE.geo.x)) locationCard();
+  seafloorCard();
   if (SITE.depthScale) velocityCard();
   displayControls($("side"), redraw);
   makePanel($("panels"), "sec", "The line as read", {height: 420});
@@ -131,6 +123,258 @@ let RAW = null, CROP = null;
   $("next").innerHTML = nextLink("line");
   glossaryScan(document.body);
 })();
+
+/* ---------- trace positions ---------- */
+function spacingBox(){
+  const G = LINE.geo || {}, n = LINE.ntrFile || LINE.nx;
+  if (LINE.dist){
+    const L = LINE.dist[n - 1];
+    $("spacingBox").innerHTML = '<p class="hint">Distance is taken from the ' + (COORD_NAMES[G.source] || "coordinates") +
+      " in " + (UNIT_NAMES[G.units] || G.units) + (G.unitsFrom === "inferred" ? ", read as such because byte 89 is empty and every value lies in the range of longitude and latitude" :
+      G.unitsFrom === "header" ? " as byte 89 says" : ", as chosen below") + ": " +
+      (L / 1000).toFixed(2) + " km along the line, " + (L / Math.max(1, n - 1)).toFixed(1) + " m between traces on average." +
+      (G.repeated > 1.05 ? " Positions repeat over runs of about " + G.repeated.toFixed(1) + " traces, so distance is interpolated between the traces where the position changes." : "") + "</p>";
+    return;
+  }
+  $("spacingBox").innerHTML =
+    '<p class="hint">The trace headers carry no coordinates that change along the line, so the distance axis uses a spacing entered here.</p>' +
+    '<label>Trace spacing, m<input type="number" id="dx" min="0.5" step="0.5" value="' + (LINE.dx || SITE.defaultDx) + '"></label>';
+  if (!LINE.dx){ LINE.dx = SITE.defaultDx; kvSet("line", LINE); }
+  $("dx").addEventListener("change", async () => {
+    LINE.dx = Math.max(0.5, +$("dx").value || SITE.defaultDx);
+    await kvSet("line", LINE);
+    redraw();
+  });
+}
+
+/* Which header bytes hold the coordinates and what units they are in. Read
+   again from the file kept in this browser, so nothing downstream changes but
+   the distances. */
+function coordCard(){
+  const G = LINE.geo || {};
+  $("coordBox").innerHTML =
+    '<div class="row2"><label>Coordinates from<select id="coSrc">' +
+      '<option value="auto">The first pair that changes</option><option value="cdp">CDP X/Y, bytes 181, 185</option>' +
+      '<option value="src">Source X/Y, bytes 73, 77</option><option value="grp">Group X/Y, bytes 81, 85</option>' +
+      '<option value="custom">Other bytes</option></select></label>' +
+    '<label>Units<select id="coUnits"><option value="header">As byte 89 says</option><option value="m">Meters</option><option value="ft">Feet</option>' +
+      '<option value="arcsec">Seconds of arc</option><option value="deg">Decimal degrees</option><option value="dms">DDDMMSS</option></select></label></div>' +
+    '<div class="row2" id="coBytes" hidden><label>X byte<input type="number" id="coX" min="1" max="237" step="1" value="73"></label>' +
+      '<label>Y byte<input type="number" id="coY" min="1" max="237" step="1" value="77"></label></div>' +
+    '<div class="btnrow"><button id="coRead">Read the coordinates again</button></div><p class="hint" id="coNote"></p>';
+  const o = LINE.coordOpts || {};
+  $("coSrc").value = o.coord || "auto"; $("coUnits").value = o.units || "header";
+  if (o.xByte){ $("coX").value = o.xByte; $("coY").value = o.yByte; }
+  const sync = () => { $("coBytes").hidden = $("coSrc").value !== "custom"; };
+  sync(); $("coSrc").addEventListener("change", sync);
+  $("coRead").addEventListener("click", async () => {
+    const F = await kvGet("segyFile");
+    if (!F){ $("coNote").textContent = "The file is no longer held in this browser; open it again to change how its coordinates are read."; return; }
+    const opts = {coord: $("coSrc").value, units: $("coUnits").value, xByte: +$("coX").value, yByte: +$("coY").value};
+    const G = readGeometry(F.ab, F.layout, opts);
+    LINE.coordOpts = opts;
+    LINE.dist = G.dist || null;
+    LINE.geo = {source: G.source, bytes: G.bytes, units: G.units, unitsFrom: G.unitsFrom, repeated: G.repeated,
+                lon: G.lon, lat: G.lat, x: G.lon ? null : G.x, y: G.lon ? null : G.y};
+    await kvSet("line", LINE);
+    spacingBox();
+    $("coNote").textContent = G.dist ? "Coordinates read from " + (COORD_NAMES[G.source] || "bytes " + G.bytes.join(" and ")) + "." +
+      " Every panel now uses these distances; a migration already applied used the old trace spacing and is worth running again."
+      : "Those bytes do not change along the line, so the entered trace spacing is used.";
+    const lc = document.getElementById("locCard"); if (lc) lc.remove();
+    if (LINE.geo.lon || LINE.geo.x) locationCard();
+    redraw();
+  });
+}
+
+/* Where the line lies. With longitude and latitude, a small map of the track
+   over OpenStreetMap tiles, with the crop marked; with projected coordinates,
+   the end points in the file's own units. */
+let LOCMAP = null;
+function locationCard(){
+  const G = LINE.geo, n = LINE.ntrFile || LINE.nx;
+  const c = document.createElement("div");
+  c.className = "card"; c.id = "locCard";
+  const end = (f, label) => {
+    const cdp = LINE.cdpF ? LINE.cdpF[f] : f + 1;
+    if (G.lon){
+      const la = G.lat[f], lo = G.lon[f];
+      return label + " (CDP " + cdp + "): " + Math.abs(la).toFixed(4) + "° " + (la >= 0 ? "N" : "S") + ", " +
+        Math.abs(lo).toFixed(4) + "° " + (lo >= 0 ? "E" : "W") +
+        ' <a href="https://www.openstreetmap.org/?mlat=' + la.toFixed(5) + "&mlon=" + lo.toFixed(5) + "#map=9/" + la.toFixed(4) + "/" + lo.toFixed(4) + '" target="_blank" rel="noopener">map</a>';
+    }
+    const f2 = G.units === "ft" ? " ft" : " m";
+    return label + " (CDP " + cdp + "): " + G.x[f].toFixed(0) + f2 + " E, " + G.y[f].toFixed(0) + f2 + " N";
+  };
+  c.innerHTML = "<h2>Location</h2>" + (G.lon ? '<div class="locmap" id="locmap"></div>' : "") +
+    '<p class="hint">' + end(0, "First trace") + "<br>" + end(n - 1, "Last trace") +
+    (G.lon ? "" : "<br>The coordinates are projected, and the file does not say in which projection, so no map is drawn.") + "</p>";
+  const anchor = document.getElementById("seafloorCard") || null;
+  if (anchor) anchor.before(c); else $("side").append(c);
+  if (!G.lon){ LOCMAP = null; return; }
+  LOCMAP = () => drawLocMap();
+  requestAnimationFrame(drawLocMap);
+}
+function drawLocMap(){
+  const host = $("locmap"); if (!host) return;
+  const G = LINE.geo, n = LINE.ntrFile || LINE.nx, W = host.clientWidth, H = host.clientHeight;
+  if (!(W > 0 && H > 0)) return;
+  const stepT = Math.max(1, Math.floor(n / 600)), pts = [];
+  let lo0 = Infinity, lo1 = -Infinity, la0 = Infinity, la1 = -Infinity;
+  for (let f = 0; f < n; f += stepT){ pts.push(f); lo0 = Math.min(lo0, G.lon[f]); lo1 = Math.max(lo1, G.lon[f]); la0 = Math.min(la0, G.lat[f]); la1 = Math.max(la1, G.lat[f]); }
+  pts.push(n - 1);
+  const wx = (lo, z) => (lo + 180) / 360 * 256 * Math.pow(2, z);
+  const wy = (la, z) => { const r = la * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * Math.pow(2, z); };
+  let z = 13;
+  while (z > 1 && (wx(lo1, z) - wx(lo0, z) > 0.55 * W || wy(la0, z) - wy(la1, z) > 0.55 * H)) z--;
+  const cx = (wx(lo0, z) + wx(lo1, z)) / 2, cy = (wy(la0, z) + wy(la1, z)) / 2;
+  const ox = cx - W / 2, oy = cy - H / 2, N = Math.pow(2, z);
+  let h = "";
+  for (let tx = Math.floor(ox / 256); tx <= Math.floor((ox + W) / 256); tx++)
+    for (let ty = Math.floor(oy / 256); ty <= Math.floor((oy + H) / 256); ty++){
+      if (ty < 0 || ty >= N) continue;
+      const tw = ((tx % N) + N) % N;
+      h += '<img alt="" src="https://tile.openstreetmap.org/' + z + "/" + tw + "/" + ty + '.png" style="left:' + (tx * 256 - ox) + "px;top:" + (ty * 256 - oy) + 'px" onerror="this.remove()">';
+    }
+  const P = f => [wx(G.lon[f], z) - ox, wy(G.lat[f], z) - oy];
+  const path = pts.map(f => P(f).map(v => v.toFixed(1)).join(",")).join(" ");
+  const c0 = fileIdx(RAW, CROP.i0), c1 = fileIdx(RAW, CROP.i1);
+  const cp = pts.filter(f => f >= c0 && f <= c1).map(f => P(f).map(v => v.toFixed(1)).join(",")).join(" ");
+  const a = P(0);
+  h += '<svg viewBox="0 0 ' + W + " " + H + '" aria-label="Track of the line"><polyline points="' + path + '" fill="none" stroke="#2b1d10" stroke-width="2.5"/>' +
+    (cp ? '<polyline points="' + cp + '" fill="none" stroke="#a3261c" stroke-width="4"/>' : "") +
+    '<circle cx="' + a[0] + '" cy="' + a[1] + '" r="4.5" fill="#fff" stroke="#2b1d10" stroke-width="2"/>' +
+    '<text x="' + (a[0] + 7) + '" y="' + (a[1] - 6) + '" font-size="11" font-family="Georgia, serif" fill="#2b1d10" stroke="#fff" stroke-width="3" paint-order="stroke">first trace</text></svg>' +
+    '<span class="osm">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</span>';
+  host.innerHTML = h;
+}
+
+/* ---------- the seafloor ----------
+   On a marine line the seafloor is the first strong reflection. It is found
+   trace by trace as the first sample where the smoothed trace amplitude rises
+   above a share of that trace's largest value, below a start time that skips
+   the direct arrival, and placed on the largest amplitude in the next 40 ms.
+   A running median across the line then removes traces where the pick jumped
+   to noise or to a deeper event, and a running mean smooths what is left. The
+   water depth in bytes 61-64 of the trace headers, where a file carries it,
+   gives a second source: two-way time at 1500 m/s. */
+function seafloorCard(){
+  const c = document.createElement("div");
+  c.className = "card"; c.id = "seafloorCard";
+  const hasWD = !!LINE.waterDepthM;
+  c.innerHTML = '<h2>Seafloor and water<button class="help" data-help="seafloor">Learn more</button></h2>' +
+    '<label class="toggle"><input type="checkbox" id="sfMarine"> The line crosses water</label>' +
+    '<div id="sfBody">' +
+    '<div class="row2"><label>Search below, s<input type="number" id="sfT0" min="0" step="0.05"></label>' +
+    '<label>Search above, s<input type="number" id="sfT1" min="0" step="0.1"></label></div>' +
+    '<label for="sfThr">Onset at <b><span id="v-sfThr"></span>%</b> of the trace maximum</label><input type="range" id="sfThr" min="5" max="80" step="1" value="25">' +
+    '<label for="sfSm">Smoothing along the line <b><span id="v-sfSm"></span> traces</b></label><input type="range" id="sfSm" min="1" max="101" step="2" value="9">' +
+    '<div class="btnrow"><button id="sfFind">Find the seafloor</button>' + (hasWD ? '<button id="sfHdr">Seafloor from header water depth</button>' : "") +
+    '<button id="sfClear">Clear the seafloor</button></div>' +
+    '<p class="hint" id="sfInfo"></p>' +
+    '<h3>Water-column mute</h3>' +
+    '<label class="toggle"><input type="checkbox" id="muOn"> Mute the water column in the crop</label>' +
+    '<div class="row2"><label>Starting above the seafloor, ms<input type="number" id="muMargin" min="0" max="500" step="5" value="40"></label>' +
+    '<label>Taper, ms<input type="number" id="muTaper" min="0" max="500" step="5" value="40"></label></div>' +
+    '<div class="guide"><p>With the mute on, the water column is zero from the step onward, so it does not enter the ' +
+    'amplitude decay, the attribute statistics or the self-organizing map.</p></div>' +
+    '<div class="btnrow"><button id="sfCsv">Save the seafloor as CSV</button></div>' +
+    '<label id="wdRow">Water depth where no seafloor is picked, km<input type="number" id="vmWater" min="0" max="11" step="0.1"></label>' +
+    "</div>";
+  $("side").append(c);
+  const t0 = secAt(0), t1 = secAt(RAW.ns - 1);
+  $("sfT0").value = (Math.max(t0, 0) + 0.05).toFixed(2); $("sfT1").value = t1.toFixed(1);
+  const mu = MUTE || {on: false, marginMs: 40, taperMs: 40};
+  $("muOn").checked = !!mu.on; $("muMargin").value = mu.marginMs; $("muTaper").value = mu.taperMs;
+  const sync = () => {
+    const on = !!(VMODEL && VMODEL.marine);
+    $("sfMarine").checked = on; $("sfBody").hidden = !on;
+    $("v-sfThr").textContent = $("sfThr").value; $("v-sfSm").textContent = $("sfSm").value;
+    $("vmWater").value = VMODEL ? (VMODEL.waterKm || 0) : 0;
+    $("sfCsv").disabled = !SEAFLOOR; $("muOn").disabled = !SEAFLOOR; $("sfClear").disabled = !SEAFLOOR;
+    $("wdRow").hidden = !!SEAFLOOR;
+    if (SEAFLOOR){
+      let a = Infinity, b = -Infinity; for (const t of SEAFLOOR.t){ a = Math.min(a, t); b = Math.max(b, t); }
+      $("sfInfo").textContent = "Seafloor " + (SEAFLOOR.src === "header" ? "from the header water depth" : "picked") + ": " + a.toFixed(2) + " to " + b.toFixed(2) +
+        " s, about " + (a * 750).toFixed(0) + " to " + (b * 750).toFixed(0) + " m of water at 1500 m/s. The depth scale hangs from it.";
+    } else $("sfInfo").textContent = on ? "No seafloor picked yet. The depth scale uses the water depth entered below." : "";
+  };
+  sync();
+  const saveModel = async () => { if (!VMODEL) return; await kvSet("vmodel", VMODEL); if (window.VMFILL) VMFILL(); };
+  $("sfMarine").addEventListener("change", async () => {
+    if (VMODEL){ VMODEL.marine = $("sfMarine").checked; await saveModel(); }
+    sync(); redraw();
+  });
+  $("vmWater").addEventListener("change", async () => { if (VMODEL){ VMODEL.waterKm = Math.max(0, +$("vmWater").value || 0); await saveModel(); redraw(); } });
+  ["sfThr", "sfSm"].forEach(k => $(k).addEventListener("input", sync));
+  const store = async (S) => {
+    SEAFLOOR = S;
+    if (S) await kvSet("seafloor", S); else await kvDelete("seafloor");
+    await kvDelete("multiplePicks");
+    // a changed seafloor moves the mute, and with it every later step
+    if (MUTE && MUTE.on){
+      if (!S){ MUTE.on = false; await kvSet("mute", MUTE); }
+      await storeCrop("Crop stored again");
+    }
+    sync(); redraw();
+    if (window.VMFILL) VMFILL();
+  };
+  $("sfFind").addEventListener("click", async () => {
+    setBusy("Finding the seafloor…"); await nextFrame();
+    const S = pickSeafloor(RAW, +$("sfT0").value, +$("sfT1").value, +$("sfThr").value / 100, +$("sfSm").value);
+    setBusy("");
+    await store(S);
+  });
+  if (hasWD) $("sfHdr").addEventListener("click", async () => {
+    const n = LINE.ntrFile, st = Math.max(1, Math.floor(n / 4000)), f = [], t = [];
+    for (let k = 0; k < n; k += st) if (LINE.waterDepthM[k] > 0){ f.push(k); t.push(2 * LINE.waterDepthM[k] / 1500); }
+    if (f.length < 2){ $("sfInfo").textContent = "The header water depths are zero on too many traces to use."; return; }
+    await store({f: Float32Array.from(f), t: Float32Array.from(t), src: "header"});
+  });
+  $("sfClear").addEventListener("click", () => store(null));
+  const muteChanged = async () => {
+    MUTE = {on: $("muOn").checked && !!SEAFLOOR, marginMs: Math.max(0, +$("muMargin").value || 0), taperMs: Math.max(0, +$("muTaper").value || 0)};
+    await kvSet("mute", MUTE);
+    await storeCrop(MUTE.on ? "Crop stored again" : "Crop stored again without the mute");
+    redraw();
+  };
+  ["muOn", "muMargin", "muTaper"].forEach(k => $(k).addEventListener("change", muteChanged));
+  $("sfCsv").addEventListener("click", () => {
+    if (!SEAFLOOR) return;
+    exportPicksCSV(RAW, {seafloor: seafloorIdx(RAW)}, "seafloor");
+  });
+}
+
+function pickSeafloor(sec, tMin, tMax, frac, smooth){
+  const {nx, ns, dt} = sec, dts = dt * 1e-6, t0 = secAt(sec.j0);
+  const j0 = Math.max(0, Math.round((tMin - t0) / dts)), j1 = Math.min(ns - 1, Math.round((tMax - t0) / dts));
+  const hw = Math.max(1, Math.round(0.01 / dts)), look = Math.max(2, Math.round(0.04 / dts));
+  const raw = new Float32Array(nx).fill(NaN), a = new Float32Array(ns);
+  for (let i = 0; i < nx; i++){
+    const b = i * ns;
+    let run = 0;
+    for (let j = 0; j < ns; j++){ run += Math.abs(sec.data[b + j]); if (j - 2 * hw - 1 >= 0) run -= Math.abs(sec.data[b + j - 2 * hw - 1]); a[Math.max(0, j - hw)] = run; }
+    let mx = 0; for (let j = j0; j <= j1; j++) if (a[j] > mx) mx = a[j];
+    if (!(mx > 0)) continue;
+    let on = -1; for (let j = j0; j <= j1; j++) if (a[j] >= frac * mx){ on = j; break; }
+    if (on < 0) continue;
+    let best = on, bv = 0;
+    for (let j = Math.max(j0, on - hw); j <= Math.min(j1, on + look); j++){ const v = Math.abs(sec.data[b + j]); if (v > bv){ bv = v; best = j; } }
+    raw[i] = best;
+  }
+  // running median, then drop picks far from it, then a running mean
+  const med = (arr, half) => { const o = new Float32Array(arr.length).fill(NaN);
+    for (let i = 0; i < arr.length; i++){ const w = []; for (let k = Math.max(0, i - half); k <= Math.min(arr.length - 1, i + half); k++) if (isFinite(arr[k])) w.push(arr[k]);
+      if (w.length){ w.sort((p, q) => p - q); o[i] = w[w.length >> 1]; } } return o; };
+  const m1 = med(raw, Math.max(4, smooth)), tol = Math.max(3, Math.round(0.05 / dts));
+  const kept = raw.map((v, i) => Math.abs(v - m1[i]) <= tol ? v : NaN);
+  const m2 = med(kept, 2), half = Math.floor(smooth / 2), out = new Float32Array(nx).fill(NaN);
+  for (let i = 0; i < nx; i++){ let s = 0, c = 0; for (let k = Math.max(0, i - half); k <= Math.min(nx - 1, i + half); k++) if (isFinite(m2[k])){ s += m2[k]; c++; } if (c) out[i] = s / c; }
+  const f = [], t = [];
+  for (let i = 0; i < nx; i++) if (isFinite(out[i])){ f.push(fileIdx(sec, i)); t.push(t0 + out[i] * dts); }
+  if (f.length < 2) return null;
+  return {f: Float32Array.from(f), t: Float32Array.from(t), src: "picked", params: {tMin, tMax, frac, smooth}};
+}
 
 /* The 1D velocity model behind the depth scale. A reference model is chosen,
    a sediment layer can be put on top, and the crustal layers can be edited;
@@ -154,10 +398,13 @@ function velocityCard(){
     $("vmBase").value = VMODEL.base; $("vmSedH").value = VMODEL.sedH; $("vmSedV").value = VMODEL.sedV;
     $("vmH1").value = ref.layers[0].h; $("vmV1").value = ref.layers[0].v;
     $("vmH2").value = ref.layers[1].h; $("vmV2").value = ref.layers[1].v; $("vmVm").value = ref.mantle;
-    const mz = mohoDepth(VMODEL), mt = timeAtDepth(mz, VMODEL), tEnd = secAt(LINE.ns - 1);
-    $("vmInfo").textContent = vmodelLabel(VMODEL) + ". Moho at " + mz.toFixed(1) + " km, " + mt.toFixed(1) +
-      " s two-way time. The record ends at " + tEnd.toFixed(1) + " s, about " + depthAtTime(tEnd, VMODEL).toFixed(0) + " km.";
+    const M = modelAt(fileIdx(RAW, (RAW.nx - 1) / 2));
+    const mz = mohoDepth(M), mt = timeAtDepth(mz, M), tEnd = secAt(LINE.ns - 1);
+    $("vmInfo").textContent = vmodelLabel(VMODEL) + ". " + (VMODEL.marine ? "At the middle of the line, with " + (M.waterKm || 0).toFixed(2) + " km of water, the " : "") +
+      (VMODEL.marine ? "" : "The ") + "Moho is at " + mz.toFixed(1) + " km, " + mt.toFixed(1) +
+      " s two-way time. The record ends at " + tEnd.toFixed(1) + " s, about " + depthAtTime(tEnd, M).toFixed(0) + " km.";
   };
+  window.VMFILL = fill;
   const save = async () => { await kvSet("vmodel", VMODEL); fill(); redraw(); };
   fill();
   $("vmBase").addEventListener("change", () => { VMODEL.base = $("vmBase").value; VMODEL.custom = null; save(); });
@@ -173,13 +420,16 @@ function redraw(){
   if (!RAW) return;
   drawSeis("sec", RAW, RAW.data);
   drawBoxOverlay("sec", CROP, RAW, true);
-  const km = kmAt(CROP.i1) - kmAt(CROP.i0);
-  $("where").innerHTML = "Crop: <b>" + (CROP.i1 - CROP.i0 + 1) + " traces</b>, " + fmt(km, 1) + " km, " +
+  const km = secKm(RAW, CROP.i1) - secKm(RAW, CROP.i0);
+  $("where").innerHTML = "Crop: <b>" + ((CROP.i1 - CROP.i0) * (RAW.istep || 1) + 1) + " traces of the file</b>, " + fmt(km, 1) + " km, " +
     fmt(secAt(CROP.j0), 2) + " to " + fmt(secAt(CROP.j1), 2) + " s";
-  const cells = (CROP.i1 - CROP.i0 + 1) * (CROP.j1 - CROP.j0 + 1);
+  const cells = ((CROP.i1 - CROP.i0) * (RAW.istep || 1) + 1) * (CROP.j1 - CROP.j0 + 1);
   $("note").innerHTML = "<p>The dashed box is the crop. Every later step, including the attributes " +
-    "and the self-organizing map, runs on the " + (cells / 1e6).toFixed(2) + " million samples inside it. " +
-    "The darkened area outside it is left out.</p>";
+    "and the self-organizing map, runs on the samples inside it, about " + (Math.min(cells, MAXCELLS) / 1e6).toFixed(2) + " million. " +
+    "The darkened area outside it is left out." +
+    (SEAFLOOR ? " The blue dashed line is the picked seafloor" + (MUTE && MUTE.on ? "; the water column above it is muted in the crop." : ".") : "") + "</p>";
+  if (LOCMAP) LOCMAP();
+  refreshRecord();
 }
 
 function syncFields(){
@@ -193,17 +443,48 @@ async function setCrop(box){
              j0: Math.max(0, box.j0), j1: Math.min(RAW.ns - 1, box.j1)};
   if (b.i1 - b.i0 < 16 || b.j1 - b.j0 < 32){ $("cropNote").textContent = "That crop is too small to filter or classify."; return; }
   CROP = b; syncFields(); redraw();
+  await storeCrop("Crop stored");
+}
+
+/* The crop as stored for every later step. A line thinned on reading is read
+   again from the file inside the crop, with every trace if that fits and as
+   few left out as possible if not. The water-column mute, when on, is applied
+   here, so every later step starts from muted data. */
+async function storeCrop(what){
+  const b = CROP;
   setBusy("Storing the crop…");
   await nextFrame();
-  const nx = b.i1 - b.i0 + 1, ns = b.j1 - b.j0 + 1;
-  const d = new Float32Array(nx * ns);
-  for (let i = 0; i < nx; i++) d.set(RAW.data.subarray((b.i0 + i) * RAW.ns + b.j0, (b.i0 + i) * RAW.ns + b.j0 + ns), i * ns);
-  await stageSave("crop", {data: d, nx, ns, dt: RAW.dt, j0: b.j0}, {i0: b.i0});
+  let nx = b.i1 - b.i0 + 1;
+  const ns = b.j1 - b.j0 + 1, st = RAW.istep || 1;
+  let d = null, meta = {i0: fileIdx(RAW, b.i0), istep: st};
+  if (st > 1 && LINE.fileKept){
+    const F = await kvGet("segyFile");
+    if (F){
+      const f0 = fileIdx(RAW, b.i0), f1 = Math.min(F.layout.ntr - 1, fileIdx(RAW, b.i1) + st - 1);
+      const stride = Math.max(1, Math.ceil((f1 - f0 + 1) * ns / MAXCELLS));
+      if (stride < st){
+        const R = readSegyCrop(F.ab, F.layout, f0, f1, stride, RAW.j0 + b.j0, RAW.j0 + b.j1);
+        d = R.data; nx = R.nx; meta = {i0: f0, istep: stride};
+      }
+    }
+  }
+  if (!d){
+    d = new Float32Array(nx * ns);
+    for (let i = 0; i < nx; i++) d.set(RAW.data.subarray((b.i0 + i) * RAW.ns + b.j0, (b.i0 + i) * RAW.ns + b.j0 + ns), i * ns);
+  }
+  const sec = {nx, ns, dt: RAW.dt, j0: b.j0, i0: meta.i0, istep: meta.istep};
+  applyMute(sec, d);
+  meta.muted = !!(MUTE && MUTE.on && SEAFLOOR);
+  await stageSave("crop", {data: d, nx, ns, dt: RAW.dt, j0: b.j0}, meta);
   await stageDropAfter("crop");
   await kvSet("crop", b);
   await kvDelete("band");
   setBusy("");
-  $("cropNote").textContent = "Crop stored. Results from later steps made on the previous crop have been cleared.";
+  $("cropNote").textContent = what + (meta.istep < st ? ", read again from the file with " +
+    (meta.istep === 1 ? "every trace" : "every " + ordinal(meta.istep) + " trace") + " (" + nx + " traces)" : "") +
+    (meta.muted ? ", with the water column muted" : "") +
+    ". Results from later steps made on the previous crop have been cleared.";
+  refreshRecord();
 }
 
 function fromFields(){
@@ -222,10 +503,12 @@ function writeHeaders(){
     Object.entries(LINE.binary).map(([k, v]) => "<tr><th>" + k + "</th><td>" + v + "</td></tr>").join("") +
     "</table></div></div>";
   h += '<h3 style="font-size:.84rem;margin:1rem 0 .2rem;font-family:var(--display)">First trace headers</h3>' +
-    '<table class="data"><tr><th>Trace (1)</th><th>CDP (21)</th><th>Scalar (71)</th><th>CDP X (181)</th>' +
+    '<div class="tablewrap"><table class="data"><tr><th>Trace (1)</th><th>Shotpoint (17)</th><th>CDP (21)</th><th>Water depth (61)</th><th>Elev. scalar (69)</th>' +
+    "<th>Scalar (71)</th><th>Source X (73)</th><th>Source Y (77)</th><th>Units (89)</th><th>CDP X (181)</th>" +
     "<th>CDP Y (185)</th><th>Delay, ms (109)</th><th>Samples (115)</th><th>Interval, µs (117)</th></tr>" +
-    LINE.traceRows.map(r => "<tr><td>" + [r.seq, r.cdp, r.scalar, r.x, r.y, r.delay, r.ns, r.dt].join("</td><td>") + "</td></tr>").join("") +
-    "</table>";
+    LINE.traceRows.map(r => "<tr><td>" + [r.seq, r.sp, r.cdp, r.wd, r.escal, r.scalar, r.sx, r.sy, r.units, r.x, r.y, r.delay, r.ns, r.dt]
+      .map(v => v === undefined ? "–" : v).join("</td><td>") + "</td></tr>").join("") +
+    "</table></div>";
   $("headers").innerHTML = h;
 }
 </script>

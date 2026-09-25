@@ -80,6 +80,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/display.js"></script>
 <script src="../js/help.js"></script>
@@ -97,7 +98,7 @@ function checks(){
   const p = FP.cfg.readParams();
   const q = qcSOS(FP.input, FP.kept, FP.removed, tensorFor(FP.input, p.sig), p.sig);
   const pc = v => (100 * v).toFixed(v < 0.1 ? 1 : 0) + "%";
-  $("checks").innerHTML = renderChecks([
+  const rows = [
     {name: "Removed energy running along the reflectors", before: "–", now: pc(q.refl), nowVal: q.refl, prev: PREV && PREV.refl,
      meaning: "Share of the removed energy that is organized and parallel to the reflectors of the input. It stays low at short lengths and rises steeply once the length passes the point where reflections are being smoothed away.",
      flag: q.refl > 0.1 ? "Above 10%: a growing part of what is removed has the geometry of reflections." : ""},
@@ -106,7 +107,9 @@ function checks(){
      flag: q.edge > q.layer ? "More is removed at edges than in layered parts, so discontinuities are being smoothed." : ""},
     {name: "Correlation between neighboring traces", before: fmt(q.contIn, 2), now: fmt(q.contOut, 2), nowVal: q.contOut, prev: PREV && PREV.contOut,
      meaning: "Lateral continuity, the quantity the attribute striping check reads on " + stepRef("attributes") + ".", flag: ""}
-  ]);
+  ];
+  $("checks").innerHTML = renderChecks(rows);
+  recordChecks("sos", rows);
   PREV = q;
 }
 function tensorFor(input, sig){
@@ -120,7 +123,7 @@ filterPage({
   defaults(input, band){
     if (band && (band.fc || band.fpk) > 0){
       const s = Math.max(1.5, Math.min(6, Math.round(1000 / (band.fc || band.fpk) / (input.dt / 1000) / 2 * 10) / 10));
-      $("sosSig").value = s;
+      $("sosSig").value = s; FP.origin.sig = "from the band measured on " + stepRef("bandwidth");
       $("sigInfo").textContent = "The dip estimation window starts at half a period of the " +
         (band.fc || band.fpk).toFixed(0) + " Hz center of the band measured on " + stepRef("bandwidth") + ".";
     }

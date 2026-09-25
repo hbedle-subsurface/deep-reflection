@@ -74,14 +74,17 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/display.js"></script>
 <script src="../js/help.js"></script>
 <script src="../js/glossary.js"></script>
 <script src="../js/common.js"></script>
+<script src="../js/spectrum.js"></script>
+<script src="../js/qc.js"></script>
 <script src="../js/filterpage.js"></script>
 <script>
-let fkCache = null, DIPSTAT = null, RES = null, FP_SIG = 3, EXT = null;
+let fkCache = null, DIPSTAT = null, RES = null, FP_SIG = 3, EXT = null, TIN = null, QREFL = null;
 
 /* The f-k transform treats the section as periodic, so a crop edge that cuts
    through strong reflections becomes a step, and the filter spreads that step
@@ -91,18 +94,52 @@ let fkCache = null, DIPSTAT = null, RES = null, FP_SIG = 3, EXT = null;
    takes the removed energy in the bottom 100 ms from 0.131 to 0.087 of the
    input RMS, the level it has when the record is not cut there. */
 const MARGIN_MS = 250, MARGIN_TR = 64;
+/* The margins come from the line as read, which has had nothing done to it.
+   So they are muted the way the crop was, and scaled row by row to the input:
+   at each time, the least-squares factor that takes the line as read onto the
+   input over the cropped traces, which is exactly the gain for a t^n gain and
+   close to it for AGC. The margins need the same trace spacing as the input;
+   where a crop was read again at a finer spacing than the line as read, there
+   is no margin. */
 async function extendedInput(input){
   const raw = sectionOf(await stageLoad("raw"));
   if (!raw) return null;
+  const st = raw.istep || 1;
+  if ((input.istep || 1) !== st) return null;
+  const ri0 = (input.i0 - raw.i0) / st;
+  if (ri0 !== Math.round(ri0)) return null;
   const mt = Math.round(MARGIN_MS / (input.dt / 1000));
-  const a = Math.max(0, input.i0 - MARGIN_TR), b = Math.min(raw.nx - 1, input.i0 + input.nx - 1 + MARGIN_TR);
+  const a = Math.max(0, ri0 - MARGIN_TR), b = Math.min(raw.nx - 1, ri0 + input.nx - 1 + MARGIN_TR);
   const c = Math.max(0, input.j0 - mt), e = Math.min(raw.ns - 1, input.j0 + input.ns - 1 + mt);
   const nx = b - a + 1, ns = e - c + 1;
   if (nx === input.nx && ns === input.ns) return null;
   const d = new Float32Array(nx * ns);
   for (let i = 0; i < nx; i++) d.set(raw.data.subarray((a + i) * raw.ns + c, (a + i) * raw.ns + c + ns), i * ns);
-  return {data: d, nx, ns, di: input.i0 - a, dj: input.j0 - c,
-          left: input.i0 - a, right: b - (input.i0 + input.nx - 1), top: input.j0 - c, bottom: e - (input.j0 + input.ns - 1)};
+  applyMute({nx, ns, dt: input.dt, j0: c, i0: raw.i0 + a * st, istep: st}, d);
+  const di = ri0 - a, dj = input.j0 - c;
+  // row factors over the cropped traces, smoothed over 21 samples
+  const r = new Float64Array(input.ns).fill(NaN);
+  for (let j = 0; j < input.ns; j++){
+    let num = 0, den = 0;
+    for (let i = 0; i < input.nx; i++){ const q = d[(di + i) * ns + dj + j]; num += q * input.data[i * input.ns + j]; den += q * q; }
+    if (den > 0) r[j] = num / den;
+  }
+  const g = new Float64Array(input.ns);
+  let last = NaN;
+  for (let j = 0; j < input.ns; j++){
+    let s2 = 0, n2 = 0;
+    for (let k = Math.max(0, j - 10); k <= Math.min(input.ns - 1, j + 10); k++) if (isFinite(r[k])){ s2 += r[k]; n2++; }
+    g[j] = n2 ? s2 / n2 : last; if (n2) last = g[j];
+  }
+  let first = g.find(v => isFinite(v)); if (!isFinite(first)) first = 1;
+  for (let j = 0; j < input.ns; j++) if (!isFinite(g[j])) g[j] = first;
+  for (let i = 0; i < nx; i++) for (let J = 0; J < ns; J++){
+    const jj = Math.max(0, Math.min(input.ns - 1, J - dj));
+    d[i * ns + J] *= g[jj];
+  }
+  for (let i = 0; i < input.nx; i++) d.set(input.data.subarray(i * input.ns, (i + 1) * input.ns), (di + i) * ns + dj);
+  return {data: d, nx, ns, di, dj,
+          left: di, right: b - (ri0 + input.nx - 1), top: dj, bottom: e - (input.j0 + input.ns - 1)};
 }
 
 /* The transition is a fraction of the dip limit, so the taper has the same
@@ -128,7 +165,8 @@ filterPage({
     const sig = band && (band.fc || band.fpk) > 0 ? Math.max(1.5, Math.min(6, 1000 / (band.fc || band.fpk) / (input.dt / 1000) / 2)) : 3;
     setBusy("Measuring dips…");
     await nextFrame();
-    DIPSTAT = dipStats(computeTensor(input.data, input.nx, input.ns, sig));
+    TIN = computeTensor(input.data, input.nx, input.ns, sig);
+    DIPSTAT = dipStats(TIN);
     FP_SIG = sig;
     setBusy("");
     $("dipInfo").textContent = DIPSTAT
@@ -137,7 +175,7 @@ filterPage({
       : "Too few layered samples to measure a dip distribution.";
   },
   defaults(input, band){
-    if (DIPSTAT) $("dipMax").value = Math.max(0.05, Math.round(DIPSTAT.p995 * 1.2 / 0.05) * 0.05);
+    if (DIPSTAT){ $("dipMax").value = Math.max(0.05, Math.round(DIPSTAT.p995 * 1.2 / 0.05) * 0.05); FP.origin.dipMax = "from the dips measured on the input"; }
     // no frequency limits until they are asked for: the filter starts as a
     // dip filter only, and the band button adds the measured band
     $("fLo").value = 0; $("fHi").value = $("fHi").max;
@@ -164,11 +202,18 @@ filterPage({
     cv.width = Math.max(200, Math.round(r.width)); cv.height = 260;
     drawFK(cv, params(), FP.input.nx, FP.input.ns, FP.input.dt);
     RES = FP.on ? residualStats(FP.removed, FP.input.nx, FP.input.ns, {sosSig: FP_SIG, dipMax: +$("dipMax").value}) : null;
+    // the same check as on the smoothing step: removed energy that runs
+    // parallel to the reflectors of the input is reflections taken out
+    QREFL = FP.on && TIN ? qcSOS(FP.input, FP.kept, FP.removed, TIN, FP_SIG).refl : null;
+    if (FP.on) recordChecks("fk", [{name: "Removed energy running along the reflectors",
+      flag: QREFL > 0.1 ? "Above 10%: part of what the filter removes has the geometry of the reflections kept." : ""}]);
     $("note").innerHTML = FP.cfg.note(FP);
   },
   note(fp){
     if (!fp.on) return "<p>The step is skipped, so the next step works on " + STAGE_NAMES[fp.input.stage] + ".</p>";
-    let s = "<p>The removed part carries " + fp.pct.toFixed(1) + "% of the input energy.";
+    let s = (QREFL !== null ? '<p class="' + (QREFL > 0.1 ? "flagline" : "okline") + '">Of the removed energy, ' + (100 * QREFL).toFixed(QREFL < 0.1 ? 1 : 0) +
+      "% is organized and runs parallel to the reflectors of the input" + (QREFL > 0.1 ? ", above the 10% at which the removed panel starts to carry reflections." : ".") + "</p>" : "") +
+      "<p>The removed part carries " + fp.pct.toFixed(1) + "% of the input energy.";
     if (RES) s += " Of the removed samples, " + (100 * RES.lin).toFixed(0) + "% are organized into oriented events; of those, " +
       (100 * RES.steep).toFixed(0) + "% dip more steeply than the limit. Oriented events beyond the limit are rejected " +
       "coherent energy, and oriented events at the limit follow the edge of the rejected wedge.";

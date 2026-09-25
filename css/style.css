@@ -344,3 +344,44 @@ body.theme-cork .viewbar .foldseg button:hover{background:#fff}
 
 /* a gap between the depth scale and the color bar */
 .plot.withdepth{column-gap:6px}
+
+/* saving a panel: two small tags at the right of its caption */
+.panel .cap .pexp{margin-left:auto;display:inline-flex;gap:4px;margin-right:8px}
+.panel .cap .ptools ~ .pexp{margin-left:8px}
+.panel .cap .pexp button{font:500 .72rem/1 var(--font-body);padding:3px 7px;border:1px solid var(--chalk-dim);background:transparent;color:var(--chalk-dim);border-radius:3px;cursor:pointer}
+.panel .cap .pexp button:hover,.panel .cap .pexp button:focus-visible{color:var(--chalk);border-color:var(--chalk)}
+body.theme-cork .panel .cap .pexp button{font-family:Georgia,serif;color:#5a4a36;border-color:#b9ad93;background:#f6f0e1}
+body.theme-cork .panel .cap .pexp button:hover,body.theme-cork .panel .cap .pexp button:focus-visible{color:#2b1d10;border-color:#3a2716}
+/* the location map on the first step */
+.locmap{position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;background:#dfe6e9;border:1px solid #b9ad93;margin:6px 0 4px}
+.locmap img{position:absolute;width:256px;height:256px;max-width:none;user-select:none}
+.locmap svg{position:absolute;inset:0;width:100%;height:100%}
+.locmap .osm{position:absolute;right:0;bottom:0;background:rgba(255,255,255,.8);font:10px Arial,sans-serif;padding:1px 4px;color:#333}
+.locmap .osm a{color:#333}
+
+/* step status in the workflow strip: a flagged step carries a red mark */
+.tag.flagged::after{content:"!";position:absolute;top:-6px;right:-4px;width:16px;height:16px;border-radius:50%;
+  background:#a3261c;color:#fff;font:700 11px/16px Arial,sans-serif;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.4)}
+/* the record of what has been done to the line */
+.record{margin:4px 0 0;padding-left:0;list-style:none;font-size:.84rem;line-height:1.35}
+.record > li{margin:0 0 7px}
+.record > li > a{font-weight:600;color:inherit}
+.record > li.here > a{color:#a3261c}
+.record > li.skipped > a{font-weight:400;opacity:.7}
+.record ul{margin:2px 0 0 12px;padding:0;list-style:none}
+.record ul li{margin:1px 0}
+.record .o{font-style:italic;opacity:.75}
+.record li.flag{color:#a3261c}
+body.theme-cork .record{font-family:Georgia,serif}
+/* the check before the attributes */
+.preflight{max-width:90ch;margin:0 0 12px;padding:10px 14px;border-left:3px solid #5C6670;font-size:.92rem}
+.preflight h3{margin:0 0 4px;font-family:var(--font-display);font-size:1rem}
+.preflight ul{margin:0;padding-left:1.1rem}
+.preflight li{margin:3px 0}
+.preflight li.pf-flag{color:#a3261c}
+.preflight p{margin:0}
+body.theme-cork .preflight{background:#fbf7ea;color:#2b1d10;font-family:Georgia,serif;box-shadow:0 3px 8px rgba(0,0,0,.35)}
+body.theme-cork .preflight h3{font-family:"Special Elite","Courier New",monospace;font-weight:400;color:#2b1d10}
+/* a check stated in the note under the panels */
+.note .flagline{color:#a3261c;font-weight:600}
+.note .okline{font-weight:600}

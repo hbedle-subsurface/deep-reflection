@@ -24,6 +24,11 @@
    background sample (Strumbelj and Kononenko, 2014), which converges to the
    Shapley values of Lundberg and Lee (2017).
 
+   Muted water column. On a marine line with the water column muted, samples
+   above the mute carry no data. They are left out of the standardization,
+   the training, the class shares and the lateral agreement, and are given the
+   class 255, which the pages draw as no class.
+
    Null test: each feature has the phase of every trace randomized
    independently, which keeps each trace's amplitude spectrum and destroys the
    relationship between neighboring traces. The map is retrained on that, and
@@ -40,6 +45,7 @@ function rng(seed){ // mulberry32, so the same settings give the same result
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 const post = (stage, frac) => self.postMessage({type: "progress", stage, frac});
+const DEAD = 255;
 
 self.onmessage = e => {
   const m = e.data;
@@ -86,7 +92,7 @@ function boxAlong(a, nx, ns, half, alongX){
 /* The features on the classification grid, one Float32Array per attribute,
    each of length gnx * gnt, trace-major. */
 function buildFeatures(m){
-  const {section: sec, keys, params: p, facies, win, tstep} = m;
+  const {section: sec, keys, params: p, facies, win, tstep, mute} = m;
   const {nx, ns, dt} = sec;
   const needT = keys.some(k => ["dip", "linearity", "coherence"].includes(k));
   let tensor = null;
@@ -107,26 +113,43 @@ function buildFeatures(m){
     }
     feats.push(g);
   });
-  return {feats, gnx, gnt};
+  let live = null;
+  if (mute){
+    live = new Uint8Array(gnx * gnt);
+    for (let i = 0; i < gnx; i++) for (let j = 0; j < gnt; j++) live[i * gnt + j] = win.j0 + j * tstep >= mute[win.i0 + i] ? 1 : 0;
+  }
+  return {feats, gnx, gnt, live};
+}
+/* Indices of the live samples, or null when every sample is live. */
+function liveIndex(live){
+  if (!live) return null;
+  let c = 0; for (let i = 0; i < live.length; i++) c += live[i];
+  const out = new Int32Array(c); let k = 0;
+  for (let i = 0; i < live.length; i++) if (live[i]) out[k++] = i;
+  return out;
 }
 
-function standardize(feats, mean, sd){
+function standardize(feats, mean, sd, live){
   const M = feats.length, n = feats[0].length, X = new Float32Array(n * M);
   const mu = mean || new Float64Array(M), sg = sd || new Float64Array(M);
   feats.forEach((a, j) => {
     if (!mean){
-      let s = 0, s2 = 0; for (let i = 0; i < n; i++){ s += a[i]; s2 += a[i] * a[i]; }
-      mu[j] = s / n; sg[j] = Math.sqrt(Math.max(s2 / n - mu[j] * mu[j], 1e-20));
+      let s = 0, s2 = 0, c = 0;
+      for (let i = 0; i < n; i++){ if (live && !live[i]) continue; s += a[i]; s2 += a[i] * a[i]; c++; }
+      c = Math.max(1, c);
+      mu[j] = s / c; sg[j] = Math.sqrt(Math.max(s2 / c - mu[j] * mu[j], 1e-20));
     }
     for (let i = 0; i < n; i++) X[i * M + j] = (a[i] - mu[j]) / sg[j];
   });
   return {X, mean: mu, sd: sg};
 }
 
-function train(X, n, M, side, rand){
+function train(X, n, M, side, rand, liveIdx){
   const N = side * side;
-  const nTrain = Math.min(20000, n), trainIdx = new Int32Array(nTrain);
-  for (let k = 0; k < nTrain; k++) trainIdx[k] = Math.floor(rand() * n);
+  const pool = liveIdx ? liveIdx.length : n;
+  if (pool < 1) throw new Error("Every sample in the window is inside the muted water column.");
+  const nTrain = Math.min(20000, pool), trainIdx = new Int32Array(nTrain);
+  for (let k = 0; k < nTrain; k++){ const r = Math.floor(rand() * pool); trainIdx[k] = liveIdx ? liveIdx[r] : r; }
   // correlation between the chosen attributes
   const corr = Array.from({length: M}, () => new Float64Array(M));
   for (const i of trainIdx) for (let a = 0; a < M; a++) for (let b = a; b < M; b++) corr[a][b] += X[i*M+a] * X[i*M+b];
@@ -168,22 +191,29 @@ function train(X, n, M, side, rand){
   return {W, corr, trainIdx};
 }
 
-function classify(X, n, M, W, N, label){
+function classify(X, n, M, W, N, label, live){
   const bmu = new Uint8Array(n), hits = new Float64Array(N), W2 = new Float32Array(N);
   for (let k = 0; k < N; k++){ let s = 0; for (let j = 0; j < M; j++) s += W[k*M+j] * W[k*M+j]; W2[k] = s; }
+  let nLive = 0;
   for (let i = 0; i < n; i++){
+    if (live && !live[i]){ bmu[i] = DEAD; continue; }
+    nLive++;
     let best = 0, bd = Infinity;
     for (let k = 0; k < N; k++){ let dot = 0; for (let j = 0; j < M; j++) dot += X[i*M+j] * W[k*M+j]; const d = W2[k] - 2*dot; if (d < bd){ bd = d; best = k; } }
     bmu[i] = best; hits[best]++;
     if (i % 200000 === 0) post(label || "Classifying", i / n);
   }
-  return {bmu, hits: Array.from(hits, h => h / n)};
+  return {bmu, hits: Array.from(hits, h => h / Math.max(1, nLive))};
 }
 
 /* How often a sample shares its class with the sample one trace over. */
 function lateralAgreement(bmu, gnx, gnt){
   let same = 0, tot = 0;
-  for (let i = 0; i + 1 < gnx; i++) for (let j = 0; j < gnt; j++){ tot++; if (bmu[i*gnt+j] === bmu[(i+1)*gnt+j]) same++; }
+  for (let i = 0; i + 1 < gnx; i++) for (let j = 0; j < gnt; j++){
+    const a = bmu[i*gnt+j], b = bmu[(i+1)*gnt+j];
+    if (a === DEAD || b === DEAD) continue;
+    tot++; if (a === b) same++;
+  }
   return tot ? same / tot : 0;
 }
 
@@ -200,15 +230,16 @@ function tauOf(X, M, W, N, trainIdx){
 
 function run(m){
   const {side, seed} = m;
-  const {feats, gnx, gnt} = buildFeatures(m);
+  const {feats, gnx, gnt, live} = buildFeatures(m);
   const M = feats.length, N = side * side, n = gnx * gnt, rand = rng(seed || 7);
+  const liveIdx = liveIndex(live);
   post("Standardizing", 0);
-  const {X, mean, sd} = standardize(feats);
-  const {W, corr, trainIdx} = train(X, n, M, side, rand);
-  const {bmu, hits} = classify(X, n, M, W, N, "Classifying the window");
+  const {X, mean, sd} = standardize(feats, null, null, live);
+  const {W, corr, trainIdx} = train(X, n, M, side, rand, liveIdx);
+  const {bmu, hits} = classify(X, n, M, W, N, "Classifying the window", live);
   const agree = lateralAgreement(bmu, gnx, gnt);
   const tau = tauOf(X, M, W, N, trainIdx);
-  S = {X, W, M, N, n, side, tau, trainIdx, rand, feats, gnx, gnt, seed: seed || 7};
+  S = {X, W, M, N, n, side, tau, trainIdx, rand, feats, gnx, gnt, live, liveIdx, seed: seed || 7};
   self.postMessage({type: "map", bmu, hits, corr: corr.map(r => Array.from(r)), W, mean: Array.from(mean),
                     sd: Array.from(sd), tau, agree, gnx, gnt});
   globalShap();
@@ -217,12 +248,13 @@ function run(m){
 /* Rebuild the state of an earlier run from its stored prototypes, so single
    samples can be explained on the SHAP page without retraining. */
 function rebuild(m){
-  const {feats, gnx, gnt} = buildFeatures(m);
+  const {feats, gnx, gnt, live} = buildFeatures(m);
   const M = feats.length, N = m.side * m.side, n = gnx * gnt, rand = rng(m.seed || 7);
   const {X} = standardize(feats, Float64Array.from(m.mean), Float64Array.from(m.sd));
-  const nTrain = Math.min(20000, n), trainIdx = new Int32Array(nTrain);
-  for (let k = 0; k < nTrain; k++) trainIdx[k] = Math.floor(rand() * n);
-  S = {X, W: Float32Array.from(m.W), M, N, n, side: m.side, tau: m.tau, trainIdx, rand, feats, gnx, gnt};
+  const liveIdx = liveIndex(live), pool = liveIdx ? liveIdx.length : n;
+  const nTrain = Math.min(20000, pool), trainIdx = new Int32Array(nTrain);
+  for (let k = 0; k < nTrain; k++){ const r = Math.floor(rand() * pool); trainIdx[k] = liveIdx ? liveIdx[r] : r; }
+  S = {X, W: Float32Array.from(m.W), M, N, n, side: m.side, tau: m.tau, trainIdx, rand, feats, gnx, gnt, live, liveIdx};
   self.postMessage({type: "ready"});
 }
 
@@ -230,7 +262,7 @@ function globalShap(){
   const {M, n, side, rand} = S;
   const nS = 400, P = 8, imp = new Float64Array(M);
   for (let s = 0; s < nS; s++){
-    const {phi} = shapFor(Math.floor(rand() * n), P);
+    const {phi} = shapFor(S.trainIdx[Math.floor(rand() * S.trainIdx.length)], P);
     for (let j = 0; j < M; j++) imp[j] += Math.hypot(phi[j][0], phi[j][1]);
     if (s % 50 === 0) post("Computing SHAP values", s / nS);
   }
@@ -240,12 +272,12 @@ function globalShap(){
 
 function nullTest(){
   if (!S) return;
-  const {feats, gnx, gnt, M, N, side, n} = S;
+  const {feats, gnx, gnt, M, N, side, n, live, liveIdx} = S;
   const rnd = rng(999);
   const shuffled = feats.map((a, q) => { post("Randomizing phase", q / M); return phaseRandomize(a, gnx, gnt, rnd); });
-  const {X} = standardize(shuffled);
-  const {W} = train(X, n, M, side, rng(S.seed || 7));
-  const {bmu} = classify(X, n, M, W, N, "Classifying the null");
+  const {X} = standardize(shuffled, null, null, live);
+  const {W} = train(X, n, M, side, rng(S.seed || 7), liveIdx);
+  const {bmu} = classify(X, n, M, W, N, "Classifying the null", live);
   self.postMessage({type: "null", agree: lateralAgreement(bmu, gnx, gnt)});
 }
 

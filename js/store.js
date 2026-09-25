@@ -65,27 +65,52 @@ function a2Tx(store, mode, run){
   }));
 }
 
-/* ---------- stages ---------- */
-function stageSave(name, section, meta){
-  return a2Tx("stages", "readwrite", st => st.put({
+/* ---------- stages ----------
+   Beside each stage, two small records in kv that every page can read
+   without loading samples: "log:<stage>", the settings the step ran with and
+   where their starting values came from, and "qc:<stage>", the checks that
+   were flagged on its output. Saving or dropping a stage clears both for it
+   and for every stage after it; the step writes them again as it runs. */
+async function stageSave(name, section, meta){
+  meta = meta || {};
+  await a2Tx("stages", "readwrite", st => st.put({
     stage: name, data: section.data, nx: section.nx, ns: section.ns,
-    dt: section.dt, j0: section.j0 || 0, meta: meta || {}, ts: Date.now()
+    dt: section.dt, j0: section.j0 || 0, meta, ts: Date.now()
   }));
+  await clearNotes(STAGES.slice(Math.max(0, STAGES.indexOf(name))));
+  const {params, start, origin, from, i0, istep, muted} = meta;
+  await kvSet("log:" + name, {params: params || null, start: start || null, origin: origin || null,
+                              from: from || null, i0, istep, muted: !!muted, j0: section.j0 || 0,
+                              nx: section.nx, ns: section.ns, ts: Date.now()});
+}
+function clearNotes(stages){
+  return a2Tx("kv", "readwrite", st => { stages.forEach(k => { st.delete("log:" + k); st.delete("qc:" + k); }); });
+}
+/* The settings and check records of every stage, keyed by stage. */
+async function stageNotes(){
+  const get = pre => a2Tx("kv", "readonly", st => st.getAll(IDBKeyRange.bound(pre, pre + "\uffff")));
+  const [L, Q] = await Promise.all([get("log:"), get("qc:")]);
+  const log = {}, qc = {};
+  (L || []).forEach(r => { log[r.key.slice(4)] = r.value; });
+  (Q || []).forEach(r => { qc[r.key.slice(3)] = r.value; });
+  return {log, qc};
 }
 
 function stageLoad(name){
   return a2Tx("stages", "readonly", st => st.get(name)).then(r => r || null);
 }
 
-function stageDrop(name){
-  return a2Tx("stages", "readwrite", st => st.delete(name));
+async function stageDrop(name){
+  await a2Tx("stages", "readwrite", st => st.delete(name));
+  await clearNotes([name]);
 }
 
-function stageDropAfter(name){
+async function stageDropAfter(name){
   const i = STAGES.indexOf(name);
-  if (i < 0) return Promise.resolve();
+  if (i < 0) return;
   const kill = STAGES.slice(i + 1);
-  return a2Tx("stages", "readwrite", st => { kill.forEach(k => st.delete(k)); });
+  await a2Tx("stages", "readwrite", st => { kill.forEach(k => st.delete(k)); });
+  await clearNotes(kill);
 }
 
 /* Which stages exist, without their samples. */

@@ -95,6 +95,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/display.js"></script>
 <script src="../js/attributes.js"></script>
@@ -154,7 +155,7 @@ function fillSelects(){
   $("cmpSel").value = CMP;
   const b = RUNS[BASE];
   $("baseInfo").textContent = b.keys.map(attrShort).join(", ") + ". Window " +
-    fmt(kmAt(SEC.i0 + b.win.i0), 1) + "–" + fmt(kmAt(SEC.i0 + b.win.i1), 1) + " km, " +
+    fmt(secKm(SEC, b.win.i0), 1) + "–" + fmt(secKm(SEC, b.win.i1), 1) + " km, " +
     fmt(secAt(SEC.j0 + b.win.j0), 2) + "–" + fmt(secAt(SEC.j0 + b.win.j1), 2) + " s; facies window " +
     b.facies.tr + " traces by " + b.facies.ms + " ms.";
 }
@@ -263,7 +264,7 @@ async function train(){
       drawAll();
     }
   };
-  worker.postMessage({type: "run", section: {data: SEC.data, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt},
+  worker.postMessage({type: "run", section: {data: SEC.data, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt}, mute: muteFor(SEC),
                       keys, params: base.params, facies: base.facies, win: base.win, tstep: base.tstep, side, seed: 7});
 }
 

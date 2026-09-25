@@ -74,6 +74,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/deep.js"></script>
 <script src="../js/display.js"></script>
@@ -114,28 +115,43 @@ function syncLabels(){
 }
 
 /* Zone A from the top of the record to mid-crust, zone B from mid-crust to
-   the Moho, both from the velocity model and across the whole line. */
+   the Moho, both from the velocity model and across the whole line. On a
+   marine line the crust starts at the seafloor, so zone A starts there and
+   mid-crust is halfway between the seafloor and the Moho, using the model at
+   the middle of the section. */
+function midModelR(){ return VMODEL ? modelFor(extentOf(SEC)) : VMODEL_DEFAULT; }
 function zonesFromModel(){
   const toJ = t => Math.max(0, Math.min(SEC.ns - 1, Math.round((t - secAt(SEC.j0)) / (SEC.dt * 1e-6))));
-  const m = VMODEL || VMODEL_DEFAULT, mz = mohoDepth(m);
-  const tMid = timeAtDepth(mz / 2, m), tMoho = timeAtDepth(mz, m);
-  Z.A = {i0: 0, i1: SEC.nx - 1, j0: toJ(Math.max(secAt(SEC.j0), 0.5)), j1: toJ(tMid)};
+  const m = midModelR(), mz = mohoDepth(m), w = m.marine ? (m.waterKm || 0) : 0;
+  const tMid = timeAtDepth((w + mz) / 2, m), tMoho = timeAtDepth(mz, m);
+  const tTop = w > 0 ? Math.max(secAt(SEC.j0), 2 * w / V_WATER + 0.1) : Math.max(secAt(SEC.j0), 0.5);
+  Z.A = {i0: 0, i1: SEC.nx - 1, j0: toJ(tTop), j1: toJ(tMid)};
   Z.B = {i0: 0, i1: SEC.nx - 1, j0: toJ(tMid), j1: toJ(tMoho)};
   if (Z.B.j1 - Z.B.j0 < 20) Z.B = {i0: 0, i1: SEC.nx - 1, j0: toJ(tMid), j1: SEC.ns - 1};
+}
+
+/* The envelope without the muted water column, for the threshold: a
+   percentile taken over muted zeros would sit far too low. */
+function liveEnv(){
+  const L = muteFor(SEC);
+  if (!L) return ENV;
+  const out = [];
+  for (let i = 0; i < SEC.nx; i++) for (let j = L[i]; j < SEC.ns; j++) out.push(ENV[i * SEC.ns + j]);
+  return out.length ? Float32Array.from(out) : ENV;
 }
 
 async function density(){
   setBusy("Measuring reflection density…"); await nextFrame();
   syncLabels();
-  THR = percentile(ENV, +$("thr").value);
+  THR = percentile(liveEnv(), +$("thr").value);
   const hx = Math.floor(+$("dw").value / 2), hz = Math.max(1, Math.round(+$("dh").value / 2 / (SEC.dt / 1000)));
   DENS = reflectionDensity(ENV, SEC.nx, SEC.ns, THR, hx, hz);
   setBusy("");
 }
 
 function measureZones(){
-  const dxKm = (kmAt(SEC.i0 + SEC.nx - 1) - kmAt(SEC.i0)) / Math.max(1, SEC.nx - 1);
-  const m = VMODEL || VMODEL_DEFAULT;
+  const dxKm = (secKm(SEC, SEC.nx - 1) - secKm(SEC, 0)) / Math.max(1, SEC.nx - 1);
+  const m = midModelR();
   for (const k of ["A", "B"]){
     const z = Z[k]; if (!z){ RES[k] = null; continue; }
     const L = findLamellae(ENV, SEC.nx, SEC.ns, THR, z, +$("minL").value);
@@ -147,7 +163,8 @@ function measureZones(){
       return isFinite(deg) ? deg : 90;
     });
     let dsum = 0, n = 0;
-    for (let i = z.i0; i <= z.i1; i++) for (let j = z.j0; j <= z.j1; j++){ dsum += ENV[i * SEC.ns + j] > THR ? 1 : 0; n++; }
+    const LV = muteFor(SEC);
+    for (let i = z.i0; i <= z.i1; i++) for (let j = Math.max(z.j0, LV ? LV[i] : 0); j <= z.j1; j++){ dsum += ENV[i * SEC.ns + j] > THR ? 1 : 0; n++; }
     const cl = correlationLengths(ENV, SEC.nx, SEC.ns, z);
     const azKm = cl.az * SEC.dt * 1e-6 * v / 2, axKm = cl.ax * dxKm;
     RES[k] = {L, lens, dips, dens: n ? dsum / n : 0, axKm, azKm,
@@ -179,12 +196,13 @@ function drawAll(){
 /* Density averaged along the line at each time, with the model depth and Moho. */
 function profile(){
   const prof = new Float32Array(SEC.ns);
-  for (let j = 0; j < SEC.ns; j++){ let s = 0; for (let i = 0; i < SEC.nx; i++) s += DENS[i * SEC.ns + j]; prof[j] = s / SEC.nx; }
+  const L = muteFor(SEC);
+  for (let j = 0; j < SEC.ns; j++){ let s = 0, c = 0; for (let i = 0; i < SEC.nx; i++){ if (L && j < L[i]) continue; s += DENS[i * SEC.ns + j]; c++; } prof[j] = c ? s / c : NaN; }
   const t = Array.from(prof, (_, j) => secAt(SEC.j0 + j));
   const P = plotFrame($("prof"), [0, 0.6], [t[t.length - 1], t[0]], "share of samples reflective", "two-way time (s)");
   if (!P) return;
   plotLine(P, Array.from(prof), t, "#841617", 1.8);
-  const m = VMODEL || VMODEL_DEFAULT, mt = timeAtDepth(mohoDepth(m), m);
+  const m = midModelR(), mt = timeAtDepth(mohoDepth(m), m);
   if (mt > t[0] && mt < t[t.length - 1]){
     P.ctx.strokeStyle = "#5C6670"; P.ctx.setLineDash([4, 3]); P.ctx.beginPath(); P.ctx.moveTo(P.L, P.Y(mt)); P.ctx.lineTo(P.w - P.R, P.Y(mt)); P.ctx.stroke(); P.ctx.setLineDash([]);
     P.ctx.fillStyle = "#5C6670"; P.ctx.font = "11px Barlow, Arial, sans-serif"; P.ctx.textAlign = "right";

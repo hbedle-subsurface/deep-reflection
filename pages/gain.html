@@ -82,6 +82,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/measure.js"></script>
 <script src="../js/display.js"></script>
@@ -90,6 +91,7 @@
 <script src="../js/common.js"></script>
 <script>
 let INPUT = null, OUT = null, ON = false, DECAY_IN = null, DECAY_OUT = null;
+let START = null, ORIGIN = {};
 
 (async function init(){
   await pageShell("gain");
@@ -97,8 +99,10 @@ let INPUT = null, OUT = null, ON = false, DECAY_IN = null, DECAY_OUT = null;
   INPUT = sectionOf(await stageInput("gain"));
   if (!INPUT){ emptyState($("stage"), "The crop has not been stored yet."); return; }
   $("where").innerHTML = "Input: <b>" + STAGE_NAMES[INPUT.stage] + "</b>";
-  DECAY_IN = decayOf(INPUT);
+  DECAY_IN = decayOf(INPUT, muteFor(INPUT));
   const n = tpowOf(DECAY_IN);
+  START = {mode: "tpow", n: n !== null ? n : +$("tpow").value, agcMs: +$("agcWin").value};
+  ORIGIN = n !== null ? {n: "measured from the amplitude decay of the input"} : {};
   $("decayInfo").textContent = DECAY_IN
     ? "Measured on the input: RMS amplitude falls " + Math.abs(DECAY_IN.db).toFixed(0) + " dB from " + DECAY_IN.t0.toFixed(1) +
       " to " + DECAY_IN.t1.toFixed(1) + " s, which a power of time fits with n = " + DECAY_IN.n.toFixed(2) + "."
@@ -156,10 +160,11 @@ async function run(){
   if (!ON) return;
   setBusy("Applying gain…"); await nextFrame();
   const p = params();
-  OUT = applyGain(INPUT, p);
+  OUT = applyMute(INPUT, applyGain(INPUT, p), true);
   await stageSave("gain", {data: OUT, nx: INPUT.nx, ns: INPUT.ns, dt: INPUT.dt, j0: INPUT.j0},
-                  {i0: INPUT.i0, params: p, from: INPUT.stage});
+                  {i0: INPUT.i0, istep: INPUT.istep, params: p, from: INPUT.stage, start: START, origin: ORIGIN});
   await stageDropAfter("gain");
+  refreshRecord();
   await kvDelete("skip:gain");
   await kvDelete("band");
   setBusy("");
@@ -170,12 +175,12 @@ async function run(){
    input, on fixed axes. */
 function rmsRows(d, sec, rows){
   const {nx, ns} = sec, n = Math.max(4, Math.floor(ns / rows)), step = Math.max(1, Math.ceil(nx / 200));
-  const t = [], v = [];
+  const t = [], v = [], L = muteFor(sec);
   for (let r = 0; r < rows; r++){
     const j0 = Math.round(r * (ns - n) / Math.max(1, rows - 1));
     let acc = 0, c = 0;
-    for (let i = 0; i < nx; i += step) for (let j = j0; j < j0 + n; j++){ acc += d[i * ns + j] ** 2; c++; }
-    t.push(secAt(sec.j0 + j0 + n / 2)); v.push(Math.sqrt(acc / Math.max(1, c)));
+    for (let i = 0; i < nx; i += step) for (let j = Math.max(j0, L ? L[i] : 0); j < j0 + n; j++){ acc += d[i * ns + j] ** 2; c++; }
+    t.push(secAt(sec.j0 + j0 + n / 2)); v.push(c ? Math.sqrt(acc / c) : 0);
   }
   return {t, v};
 }
@@ -217,16 +222,18 @@ function drawAll(){
   }
   if (!ON){ $("checks").innerHTML = '<p class="hint" style="color:var(--chalk-dim)">The checks appear once the step is applied.</p>';
     $("note").innerHTML = "<p>The step is skipped, so the next step works on " + STAGE_NAMES[INPUT.stage] + ".</p>"; return; }
-  DECAY_OUT = decayOf({data: out, nx: INPUT.nx, ns: INPUT.ns, dt: INPUT.dt, j0: INPUT.j0});
+  DECAY_OUT = decayOf({data: out, nx: INPUT.nx, ns: INPUT.ns, dt: INPUT.dt, j0: INPUT.j0}, muteFor(INPUT));
   const keep = lateralKeep(INPUT.data, out, INPUT);
-  $("checks").innerHTML = renderChecks([
+  const rows = [
     {name: "Decay left after the gain, as a power of time", before: DECAY_IN ? fmt(DECAY_IN.n, 2) : "–", now: DECAY_OUT ? fmt(DECAY_OUT.n, 2) : "–",
      meaning: "Near zero once the gain matches the decay. Negative means the deep record is now brighter than the shallow.",
      flag: DECAY_OUT && Math.abs(DECAY_OUT.n) > 0.5 ? "More than 0.5 from zero: the gain and the decay do not match." : ""},
     {name: "Lateral amplitude relations kept", before: "1.00", now: fmt(keep, 2),
      meaning: "Correlation, window by window, between each trace's RMS amplitude before and after. A time gain keeps it at 1.",
      flag: keep < 0.9 ? "Below 0.9: the gain has changed how bright traces are relative to their neighbors." : ""}
-  ]);
+  ];
+  $("checks").innerHTML = renderChecks(rows);
+  recordChecks("gain", rows);
   $("note").innerHTML = "<p>" + ($("mode").value === "tpow"
     ? "Each sample is multiplied by (t / " + fmt(secAt(INPUT.j0 + INPUT.ns / 2), 2) + " s) raised to " + fmt(+$("tpow").value, 1) + ", the same curve on every trace."
     : "Each sample is divided by the RMS amplitude in a " + $("agcWin").value + " ms window around it.") +
@@ -261,7 +268,7 @@ $("btnStart").addEventListener("click", () => {
 $("apply").addEventListener("change", async () => {
   ON = $("apply").checked;
   if (ON){ await run(); return; }
-  await stageDrop("gain"); await stageDropAfter("gain"); await kvSet("skip:gain", true); await kvDelete("band");
+  await stageDrop("gain"); await stageDropAfter("gain"); await kvSet("skip:gain", true); await kvDelete("band"); refreshRecord();
   drawAll();
 });
 window.addEventListener("resize", debounce(drawAll, 200));

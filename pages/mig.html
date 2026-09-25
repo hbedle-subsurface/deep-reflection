@@ -72,6 +72,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/deep.js"></script>
 <script src="../js/display.js"></script>
@@ -82,10 +83,10 @@
 <script>
 let DIPS = [];
 
-function dxMeters(){
-  if (LINE.dist) return LINE.dist[LINE.dist.length - 1] / Math.max(1, LINE.nx - 1);
-  return LINE.dx || SITE.defaultDx;
-}
+function dxMeters(){ return traceSpacingM(FP.input); }
+/* The model in the middle of the section; on a marine line it has the water
+   depth there. */
+function midModel(sec){ return VMODEL ? modelFor(extentOf(sec || FP.input)) : null; }
 
 filterPage({
   stage: "mig", stepId: "mig",
@@ -96,14 +97,15 @@ filterPage({
     const tEnd = secAt(input.j0 + input.ns - 1);
     $("tv").max = Math.floor(tEnd * 4) / 4;
     $("tv").value = Math.min(+$("tv").max, Math.round(tEnd * 0.5 * 4) / 4);
-    if (VMODEL) $("vel").value = vRms(+$("tv").value, VMODEL).toFixed(2);
+    if (VMODEL){ $("vel").value = vRms(+$("tv").value, midModel(input)).toFixed(2); FP.origin.v = "RMS velocity of the model at " + $("tv").value + " s"; }
+    FP.origin.dx = LINE.dist ? "from the trace positions in the file" : "from the trace spacing entered on " + stepRef("line");
   },
   setParams(p){ $("vel").value = p.v; if (p.tv) $("tv").value = p.tv; },
   readParams: () => ({v: +$("vel").value, tv: +$("tv").value, dx: dxMeters()}),
   syncLabels(){
     $("v-vel").textContent = (+$("vel").value).toFixed(2); $("v-tv").textContent = (+$("tv").value).toFixed(2);
     $("velInfo").textContent = VMODEL ? "RMS velocity of the model at " + (+$("tv").value).toFixed(1) + " s: " +
-      vRms(+$("tv").value, VMODEL).toFixed(2) + " km/s. " + vmodelLabel(VMODEL) + "." : "";
+      vRms(+$("tv").value, midModel()).toFixed(2) + " km/s. " + vmodelLabel(VMODEL) + "." : "";
   },
   apply: (input, p) => stoltMigrate(input.data, input.nx, input.ns, input.dt, p.dx, p.v * 1000),
   after(){ drawDips(); },
@@ -134,16 +136,16 @@ function drawDips(){
     DIPS.map(m => "<tr><td>" + (m.panel === "pIn" ? "input" : "migrated") + "</td><td>" + m.t.toFixed(1) + "</td><td>" +
       (m.p * 1000).toFixed(0) + "</td><td>" + (isFinite(m.deg) ? m.deg.toFixed(1) + "°" : "beyond 90°") + "</td></tr>").join("") + "</table>" +
     '<p class="hint">Input: sin(dip) = v · slope / 2, the reflector as drawn on an unmigrated section. Migrated: tan(dip) = v · slope / 2. ' +
-    "v is the average velocity of the model to the middle of the line.</p>" : '<p class="hint">No measurements yet.</p>';
+    "v is the average velocity of the model down to the time of the measurement, at its place on the line.</p>" : '<p class="hint">No measurements yet.</p>';
 }
 
 function measure(id, a, b){
   if (!a || !b || a.i === b.i) return;
   const sec = FP.input;
-  const x1 = kmAt(sec.i0 + a.i), x2 = kmAt(sec.i0 + b.i);
+  const x1 = secKm(sec, a.i), x2 = secKm(sec, b.i);
   const t1 = secAt(sec.j0 + a.j), t2 = secAt(sec.j0 + b.j);
   const p = (t2 - t1) / (x2 - x1);                          // s per km, two-way
-  const tm = (t1 + t2) / 2, v = VMODEL ? vAvg(tm, VMODEL) : +$("vel").value;
+  const tm = (t1 + t2) / 2, v = VMODEL ? vAvg(tm, modelAt(fileIdx(sec, (a.i + b.i) / 2))) : +$("vel").value;
   const migrated = id === "pKept" && FP.on;
   DIPS.push({panel: id, a, b, t: tm, p, deg: dipFromSlope(p, v, migrated)});
   drawDips();
@@ -162,7 +164,7 @@ function measure(id, a, b){
 
 $("btnModel").addEventListener("click", () => {
   if (!VMODEL) return;
-  $("vel").value = vRms(+$("tv").value, VMODEL).toFixed(2);
+  $("vel").value = vRms(+$("tv").value, midModel()).toFixed(2);
   $("vel").dispatchEvent(new Event("input"));
 });
 $("tv").addEventListener("input", () => FP && FP.cfg.syncLabels());

@@ -102,6 +102,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/display.js"></script>
 <script src="../js/attributes.js"></script>
@@ -148,10 +149,10 @@ function setPicks(keys){ document.querySelectorAll("#checks input").forEach(x =>
 function syncLabels(){
   const s = +$("somSide").value;
   $("v-side").textContent = s + " × " + s + " = " + s * s;
-  $("v-ftr").textContent = $("ftr").value + " (" + fmt(($("ftr").value - 1) * ((LINE && LINE.dist ? LINE.dist[LINE.nx-1] / (LINE.nx - 1) : (LINE && LINE.dx) || 0)), 0) + " m)";
+  $("v-ftr").textContent = $("ftr").value + " (" + fmt(($("ftr").value - 1) * traceSpacingM(SEC), 0) + " m)";
   $("v-fms").textContent = $("fms").value;
   if (SEC && WIN){
-    $("wx0").value = fmt(kmAt(SEC.i0 + WIN.i0), 1); $("wx1").value = fmt(kmAt(SEC.i0 + WIN.i1), 1);
+    $("wx0").value = fmt(secKm(SEC, WIN.i0), 1); $("wx1").value = fmt(secKm(SEC, WIN.i1), 1);
     $("wt0").value = fmt(secAt(SEC.j0 + WIN.j0), 2); $("wt1").value = fmt(secAt(SEC.j0 + WIN.j1), 2);
   }
 }
@@ -170,6 +171,7 @@ function drawAll(){
     const gi = s.i - r.win.i0, gj = Math.round((s.j - r.win.j0) / r.tstep);
     if (gi < 0 || gi >= r.gnx || gj < 0 || gj >= r.gnt) return "";
     const k = r.bmu[gi * r.gnt + gj];
+    if (k === 255) return ", in the muted water column";
     return ", neuron row " + (Math.floor(k / r.side) + 1) + ", column " + (k % r.side + 1);
   };
   $("pCls-title").textContent = r ? runLabel(r) : "Seismic amplitude, no map trained yet";
@@ -247,7 +249,7 @@ async function train(){
       drawAll();
     }
   };
-  worker.postMessage({type: "run", section: {data: SEC.data, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt},
+  worker.postMessage({type: "run", section: {data: SEC.data, nx: SEC.nx, ns: SEC.ns, dt: SEC.dt}, mute: muteFor(SEC),
                       keys, params: p, facies, win, tstep, side, seed: 7});
 }
 
@@ -264,7 +266,7 @@ $("btnNull").addEventListener("click", () => {
 });
 /* window from the number fields: the nearest trace and sample to each value */
 function winFromFields(){
-  const toI = km => { let b = 0, bd = Infinity; for (let i = 0; i < SEC.nx; i++){ const d = Math.abs(kmAt(SEC.i0 + i) - km); if (d < bd){ bd = d; b = i; } } return b; };
+  const toI = km => { let b = 0, bd = Infinity; for (let i = 0; i < SEC.nx; i++){ const d = Math.abs(secKm(SEC, i) - km); if (d < bd){ bd = d; b = i; } } return b; };
   const toJ = t => Math.max(0, Math.min(SEC.ns - 1, Math.round((t - secAt(SEC.j0)) / (SEC.dt * 1e-6))));
   const i0 = toI(+$("wx0").value), i1 = toI(+$("wx1").value), j0 = toJ(+$("wt0").value), j1 = toJ(+$("wt1").value);
   if (i1 - i0 < 8 || j1 - j0 < 16) return;

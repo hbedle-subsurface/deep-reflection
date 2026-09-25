@@ -23,8 +23,13 @@ async function filterPage(cfg){
 
   $("where").innerHTML = "Input: <b>" + STAGE_NAMES[input.stage] + "</b>";
   if (cfg.prepare) await cfg.prepare(input, band);
+  // The starting values, and where each came from, are kept whether or not
+  // the step has run before, so the record can say which settings were
+  // changed by hand.
+  FP.origin = {};
+  if (cfg.defaults) cfg.defaults(input, band);
+  FP.start = cfg.readParams();
   if (stored && stored.meta.params) cfg.setParams(stored.meta.params);
-  else if (cfg.defaults) cfg.defaults(input, band);
   $("apply").checked = FP.on;
 
   displayControls($("side"), drawPanels);
@@ -57,14 +62,19 @@ async function filterPage(cfg){
     await nextFrame();
     const t0 = performance.now();
     const out = await cfg.apply(FP.input, FP.params);
+    // re-mute, except where a migration has moved the seafloor away from its
+    // unmigrated pick: on the migration step itself and on any step after it
+    const migrated = cfg.stage === "mig" || (STAGES.indexOf(cfg.stage) > STAGES.indexOf("mig") && (await stageList()).includes("mig"));
+    if (!migrated) applyMute(FP.input, out, true);
     FP.kept = out;
     FP.removed = diff(FP.input.data, out);
     FP.secs = (performance.now() - t0) / 1000;
     setBusy("Storing…");
     await stageSave(cfg.stage, {data: out, nx: input.nx, ns: input.ns, dt: input.dt, j0: input.j0},
-                    {i0: input.i0, params: FP.params, from: input.stage});
+                    {i0: input.i0, istep: input.istep, params: FP.params, from: input.stage, start: FP.start, origin: FP.origin});
     await stageDropAfter(cfg.stage);
     setBusy("");
+    refreshRecord();
     markFlow(true);
     drawPanels();
     if (cfg.after) cfg.after();
@@ -84,6 +94,7 @@ async function filterPage(cfg){
     if (FP.on){ await run(); return; }
     await stageDrop(cfg.stage);
     await stageDropAfter(cfg.stage);
+    refreshRecord();
     FP.kept = FP.input.data;
     FP.removed = new Float32Array(FP.input.data.length);
     markFlow(false);

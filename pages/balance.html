@@ -99,6 +99,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/spectrum.js"></script>
 <script src="../js/measure.js"></script>
@@ -126,6 +127,7 @@ filterPage({
     const nyq = 0.5 / (input.dt * 1e-6);
     if (band){
       setFromBand(band, nyq);
+      ["f1", "f2", "f3", "f4"].forEach(k => { FP.origin[k] = "from the band measured on " + stepRef("bandwidth"); });
       $("taperInfo").textContent = "Taper corners start from the band measured on " + stepRef("bandwidth") + ": f2 and f3 at the 6 dB points, f1 and f4 at the 20 dB points.";
     } else {
       $("f1").value = 4; $("f2").value = 8; $("f3").value = Math.round(0.4 * nyq); $("f4").value = Math.round(0.5 * nyq);
@@ -205,7 +207,7 @@ function drawSpec(){
 function checks(){
   if (!QB){ $("checks").innerHTML = '<p class="hint" style="color:var(--chalk-dim)">The checks appear once balancing has run.</p>'; return; }
   const q = QB;
-  $("checks").innerHTML = renderChecks([
+  const rows = [
     {name: "Change in level above the band", before: "–", now: q.hasAbove ? (q.noiseDb > 0 ? "+" : "") + fmt(q.noiseDb, 1) + " dB" : "–", nowVal: q.noiseDb, prev: PREVB && PREVB.noiseDb,
      meaning: "Level change above the upper 20 dB edge of the input, relative to the change inside its 6 dB band. Those frequencies hold mostly noise; a taper corner f4 at the 20 dB edge lowers them.",
      flag: q.hasAbove && q.noiseDb > 6 ? "Above 6 dB: noise outside the band is being raised toward the level of the signal." : ""},
@@ -214,7 +216,9 @@ function checks(){
     {name: "Correlation between neighboring traces", before: fmt(q.contIn, 2), now: fmt(q.contOut, 2), nowVal: q.contOut, prev: PREVB && PREVB.contOut,
      meaning: "Lateral continuity. Raising frequencies where the traces carry little shared signal lowers it.",
      flag: q.contOut < q.contIn - 0.05 ? "Lower than the input by more than 0.05: much of what was raised differs from trace to trace." : ""}
-  ]);
+  ];
+  $("checks").innerHTML = renderChecks(rows);
+  recordChecks("balance", rows);
   PREVB = q;
 }
 $("btnStart").addEventListener("click", async () => {

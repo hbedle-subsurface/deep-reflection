@@ -97,6 +97,7 @@
 <script src="../js/site.js"></script>
 <script src="../js/vmodel.js"></script>
 <script src="../js/store.js"></script>
+<script src="../js/segy.js"></script>
 <script src="../js/dsp.js"></script>
 <script src="../js/spectrum.js"></script>
 <script src="../js/display.js"></script>
@@ -158,6 +159,7 @@ function reliefScale(src, p, nx, ns){
   makePanel($("panels"), "pSeis", "Seismic amplitude", {height: 220});
   attachReadout("pSeis"); linkGroup("pSeis");
   viewBar($("stage"));
+  preflightBox($("stage"));
   onView(redrawAll);
   drawSeisPanel();
   $("next").innerHTML = nextLink("attributes");
@@ -241,8 +243,11 @@ function correlation(){
   const real = SHOWN.filter(m => m.a);
   if (real.length < 2){ $("corr").innerHTML = '<p class="hint">Two or more single-valued attributes are needed.</p>'; $("note").innerHTML = ""; return; }
   const N = real[0].a.length, stride = Math.max(1, Math.floor(N / 120000));
+  // the muted water column is left out, since it would correlate every
+  // attribute with every other through its zeros
+  const L = muteFor(SEC), ns = SEC.ns;
   const cols = real.map(m => {
-    const v = []; for (let k = 0; k < N; k += stride) v.push(isFinite(m.a[k]) ? m.a[k] : 0);
+    const v = []; for (let k = 0; k < N; k += stride){ if (L && k % ns < L[Math.floor(k / ns)]) continue; v.push(isFinite(m.a[k]) ? m.a[k] : 0); }
     let mu = 0; for (const x of v) mu += x; mu /= v.length;
     let sd = 0; for (const x of v) sd += (x - mu) * (x - mu); sd = Math.sqrt(sd / v.length) || 1;
     return {v, mu, sd};
